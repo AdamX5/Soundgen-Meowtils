@@ -78,7 +78,9 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
 - **Click timing:**
   - **Spread** (default): clicks handled in the same 50 ms game tick are spaced out over the next tick, so they play about 50 ms late.
   - **Instant:** no delay, but those clicks stack.
-- **Drag style:** **Clicks** (one sample per click) or **Loop** (a continuous rattle that fades out when clicking stops, plus an optional end click).
+- **Right Style:** **Clicks** (one sample per click), **Loop** (a continuous rattle that fades out when clicking stops, plus an optional end click), or **Auto** (default since 0.2.0: single `right_click` sounds while slow, the rattle once the rate passes Drag Threshold).
+- **Choke** (0.2.0): a new click fades out the previous click's tail over Choke Fade, so fast clicking stays crisp.
+- **Other Keys** (0.2.0): every keyboard key not owned by another channel (hotbar, perspective, Esc, chat typing). It reads the physical keyboard each frame; Where = Everywhere or In Game.
 
 ### Tools
 
@@ -87,6 +89,7 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
   - `report`: pack health per slot.
   - `preview`: renders a slot through the real engine to a WAV.
   - `init`: creates a pack's folders.
+- **`build.bat --install`:** also copies the extension into the live `%APPDATA%\.minecraft\meowtils\extensions` (old SoundGen files only are replaced; it refuses unless `meowtils.json` is there).
 - **`build.bat` / `build.sh`:** one-command build. Needs only a JDK 17+; no Gradle and no Forge setup. It produces the `.meowtils` file and an install package (folder + zip) with two folders: "Drop into extensions folder" (the `.meowtils`) and "Drop into meowtils folder" (`soundgen/packs/default/…`).
 - **GitHub Actions** (`.github/workflows/build.yml`): builds and tests every push. When `VERSION` holds a version with no release yet, it publishes a GitHub Release with the `.meowtils` file and the install zip attached.
 
@@ -105,9 +108,10 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
 |---|---|
 | Meowtils extension API, events and loading paths | **Verified** (read from the 2.0.1 jar) |
 | Extension compiles against the real Meowtils API | **Verified** |
-| Engine timing, loops, voice limit, WAV formats, trim, splitter, pairing, shuffle | **Verified** (self-test, 29 checks) |
+| Engine timing, loops, voice limit, WAV formats, trim, splitter, pairing, shuffle | **Verified** (self-test) |
 | SRG name translation of the built file | **Verified** (round-trip through Meowtils' own table) |
-| The extension loads and runs inside Lunar | **Open**: never run in game yet |
+| The extension loads and runs inside Lunar | **Verified** by the user (0.1.1): module appears, Test Sounds plays, output device switching works |
+| Choke, Auto right click, Other Keys, button size (0.2.0) | **Verified offline** (self-test, 36 checks); **open** in game |
 | Lunar's game directory is `%APPDATA%\.minecraft` | **Verified** on the user's PC: `C:\Users\Adam\AppData\Roaming\.minecraft\meowtils\` holds meowtils.json, meowtils.log, extensions\ |
 | User runs Meowtils 2.0.1 on Lunar via `%APPDATA%\lunarclient\Meowtils-Lunar\` (Meowtils.jar + lunar-agent.jar) | **Verified** (user screenshot; jar size matches 2.0.1). That folder is the mod loader, not where extensions go |
 | Meowtils' hooks behave the same on Lunar as on Forge | **Inferred** (Meowtils advertises Lunar support) |
@@ -130,16 +134,33 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
 
 ## 6. Roadmap
 
-### Next: first in-game run (needs the user)
+### In-game feedback so far (0.1.1, Lunar)
 
-1. Install from the latest release (`docs/GUIDE.md` Part 1).
-2. Confirm SoundGen appears in Meowtils and the chat lines show up. If not, get `meowtils/meowtils.log` lines and fix.
-3. Work through GUIDE Part 3 with the Debug Readout: fast place, butterfly, legit scaffold, sprint reset, jumping and knockback. Paste the readout lines back.
-4. Choose default read methods from those results and change the defaults in `SoundGen.java`.
+The user tested 0.1.1 and is happy with it overall. Their feedback, and what 0.2.0 does about each point:
+
+| Feedback | 0.2.0 response | Status |
+|---|---|---|
+| Fast butterfly clicks: the sounds didn't keep up | **Choke** (each new click fades out the previous tail) | Built, **not yet re-tested**. Root cause not confirmed; see below |
+| Right click: wants a single-click sound for slow clicks and the drag sound when held with fast place | **Right Style = Auto** + `right_click` slot + Drag Threshold | Built, not re-tested. Existing configs keep "Clicks": switch to Auto |
+| Every other key should sound too (hotbar 1-0, F for perspective, Esc, …), client side | **Other Keys** channel (raw keyboard, every key not owned by another channel) | Built, not re-tested |
+| Output buttons: text too small to read | Button size changed to 5.0, the value every Meowtils module uses (checked in the jar) | Built, not re-tested |
+| Wants to work directly in the live meowtils folder | `build.bat --install` plus `/add-dir` of the live folder (see CLAUDE.md) | Built |
+
+**Butterfly not keeping up: possible causes, not yet distinguished.**
+1. Overlapping tails smearing at high CPS. Choke addresses this.
+2. Spread timing adds up to 50 ms and evens clicks out, which can feel laggy. Try Click Timing = Instant.
+3. The Game Click method missing clicks. Compare `L/s game` with `raw` in the Debug Readout while butterfly clicking. If raw is much higher, use Raw Mouse for left click.
+
+Ask the user for a Debug Readout line while butterfly clicking at full speed.
+
+### Next
+
+1. Install 0.2.0 (`build.bat --install`, or the release zip) and re-test the four points above.
+2. Work through GUIDE Part 3 with the Debug Readout (fast place, butterfly, legit scaffold, sprint reset, jumping, knockback). Pick default read methods from the results and set them in `SoundGen.java`.
 
 ### Then
 
-5. **Recording pack v1** (GUIDE Parts 4–5): butterfly 40+, drag 40+, drag_loop 6+, keys 20+ each.
+5. **Recording pack v1** (GUIDE Parts 4–5): butterfly 40+, drag 40+, drag_loop 6+, right_click 20+, keys 20+ each, other_down/up 20+.
 6. **Timing tuning:** Spread vs Instant, jitter amounts, loop hold timeout, synthetic release time.
 7. **Routing:** VB-Cable → OBS separate track, with a −50 ms sync offset when using Spread timing.
 8. **Open question from the user:** what "click hit" means (hit select? block-hitting?). It decides whether cancelled clicks should make sound.
@@ -152,6 +173,8 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
 - **On-screen debug panel** instead of chat lines.
 - **Clean shutdown on reload:** detect Meowtils' extension reload and close the old audio thread.
 - **Soft and hard layers:** choose softer or harder takes based on the time between clicks.
+- **More inputs:** mouse wheel (hotbar scrolling) and middle/side mouse buttons.
+- **Per-key sounds for Other Keys:** e.g. separate Esc/Enter/Backspace/number-row slots (big keys sound different).
 
 ---
 

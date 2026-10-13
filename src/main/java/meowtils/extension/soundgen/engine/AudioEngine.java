@@ -48,6 +48,7 @@ public final class AudioEngine {
     private volatile float gainJitter = 0.1f;
     private volatile float pitchJitter = 0.03f;
     private volatile int selection = SampleSet.SHUFFLE;
+    private volatile int chokeFadeFrames = RATE * 3 / 1000;
 
     // Audio-thread state
     private long frameClock;
@@ -74,7 +75,16 @@ public final class AudioEngine {
     // ------------------------------------------------------------------ game-side API
 
     public void play(Sound sound, float gain, long atNanos) {
-        if (gain > 0) queue.offer(CommandQueue.PLAY, sound.ordinal(), 0, gain, atNanos);
+        play(sound, gain, atNanos, 0);
+    }
+
+    /**
+     * Plays a one-shot in a choke group (0 = none). A new hit in a group fades out the tail of
+     * the earlier hits in the same group over {@link #setChokeFadeMs}, like a real switch whose
+     * next click stops the previous one ringing. Keeps very fast clicking crisp instead of smeared.
+     */
+    public void play(Sound sound, float gain, long atNanos, int chokeGroup) {
+        if (gain > 0) queue.offer(CommandQueue.PLAY, sound.ordinal(), chokeGroup, gain, atNanos);
     }
 
     /** Starts a looping voice identified by {@code tag}; ignored if that tag is already looping. */
@@ -110,6 +120,10 @@ public final class AudioEngine {
     }
 
     /** {@link SampleSet#SHUFFLE} or {@link SampleSet#RANDOM}. */
+    public void setChokeFadeMs(float ms) {
+        chokeFadeFrames = Math.max(1, (int) (ms * RATE / 1000f));
+    }
+
     public void setSelection(int mode) {
         selection = mode;
     }
@@ -341,7 +355,7 @@ public final class AudioEngine {
             long start = frameClock + Math.max(0L, (q.time[slot] - now) * RATE / 1_000_000_000L);
             switch (q.type[slot]) {
                 case CommandQueue.PLAY:
-                    startVoice(q.arg[slot], 0, q.gain[slot], start, false);
+                    startVoice(q.arg[slot], q.tag[slot], q.gain[slot], start, false);
                     break;
                 case CommandQueue.LOOP_START:
                     if (!loopActive(q.tag[slot])) startVoice(q.arg[slot], q.tag[slot], q.gain[slot], start, true);
@@ -386,6 +400,28 @@ public final class AudioEngine {
             v.fadeInLeft = 0;
         }
         v.active = true;
+        if (!loop && tag != 0) choke(v);
+    }
+
+    /** Earlier hits in {@code v}'s group fade out where {@code v} starts (and vice versa if v is earlier). */
+    private void choke(Voice v) {
+        for (Voice o : voices) {
+            if (o == v || !o.active || o.loop || o.tag != v.tag) continue;
+            if (o.start <= v.start) {
+                fadeAt(o, v.start);
+            } else {
+                fadeAt(v, o.start);
+            }
+        }
+    }
+
+    private void fadeAt(Voice v, long frame) {
+        long at = Math.max(frame, v.start);
+        if (at < v.fadeStart) {
+            v.fadeStart = at;
+            v.fadeTotal = chokeFadeFrames;
+            v.fadeLeft = chokeFadeFrames;
+        }
     }
 
     private Voice allocate() {

@@ -38,6 +38,9 @@ public final class EngineSelfTest {
         splitterFindsEveryHit();
         splitterSeparatesFastButterflyTake();
         toolSplitsReportsAndPreviews();
+        chokeCutsPreviousTail();
+        autoStyleSwitchesToRattleWhenFast();
+        otherKeysSkipHandledAndPairRelease();
         cpuCost();
         System.out.println(failures == 0 ? "ALL PASSED" : failures + " FAILED");
         if (failures > 0) System.exit(1);
@@ -117,8 +120,9 @@ public final class EngineSelfTest {
         Timing timing = new Timing();
         timing.spread = true;
         timing.clickJitterMs = 0;
-        ClickChannel channel = new ClickChannel(e, timing, Sound.BUTTERFLY, Sound.DRAG_LOOP, Sound.DRAG_END, 1,
+        ClickChannel channel = new ClickChannel(e, timing, Sound.BUTTERFLY, Sound.BUTTERFLY, Sound.DRAG_LOOP, Sound.DRAG_END, 1,
                 new boolean[]{true, false});
+        channel.choke = false; // impulses: choke would only fade tails, but keep this test about spacing
         channel.click(0, 0);
         channel.click(0, 0);
         channel.click(0, 0);
@@ -246,6 +250,79 @@ public final class EngineSelfTest {
         File preview = new File(root, "preview.wav");
         meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"preview", pack.getPath(), "key_down", preview.getPath(), "--seconds", "2"});
         check("preview rendered", preview.length() > 48000 * 3);
+    }
+
+    private static void chokeCutsPreviousTail() {
+        float[] tone = new float[4800]; // 100 ms of steady level: easy to see overlap
+        java.util.Arrays.fill(tone, 0.4f);
+        for (int group : new int[]{0, 1}) {
+            AudioEngine e = new AudioEngine(() -> fakeNanos);
+            fakeNanos = 0;
+            e.setSamples(only(Sound.BUTTERFLY, tone));
+            e.setGainJitter(0);
+            e.setPitchJitter(0);
+            e.setChokeFadeMs(2);
+            e.play(Sound.BUTTERFLY, 1f, 0, group);
+            e.play(Sound.BUTTERFLY, 1f, ms(20), group);
+            float[] out = render(e, 4800);
+            float at30ms = out[1440];
+            if (group == 0) {
+                check("without choke both hits overlap (" + at30ms + ")", Math.abs(at30ms - 0.8f) < 0.01f);
+            } else {
+                check("with choke the earlier hit fades out over 2 ms (" + at30ms + ")",
+                        Math.abs(at30ms - 0.4f) < 0.01f && Math.abs(out[960 + 48] - 0.6f) < 0.03f && Math.abs(out[960 + 100] - 0.4f) < 0.01f);
+            }
+        }
+    }
+
+    private static void autoStyleSwitchesToRattleWhenFast() {
+        AudioEngine e = engineWithImpulse(Sound.RIGHT_CLICK);
+        float[] dc = new float[4800];
+        java.util.Arrays.fill(dc, 0.3f);
+        SampleSet[] sets = new SampleSet[Sound.count()];
+        float[] impulse = new float[64];
+        impulse[0] = 1f;
+        sets[Sound.RIGHT_CLICK.ordinal()] = new SampleSet(new Sample[]{new Sample(impulse, "single")}, false);
+        sets[Sound.DRAG_LOOP.ordinal()] = new SampleSet(new Sample[]{new Sample(dc, "rattle")}, false);
+        e.setSamples(sets);
+        Timing timing = new Timing();
+        timing.spread = false;
+        timing.clickJitterMs = 0;
+        ClickChannel c = new ClickChannel(e, timing, Sound.DRAG, Sound.RIGHT_CLICK, Sound.DRAG_LOOP, Sound.DRAG_END, 1,
+                new boolean[]{true});
+        c.style = ClickChannel.STYLE_AUTO;
+        c.dragThresholdCps = 8;
+        c.endClick = false;
+        // two slow clicks (500 ms apart): single sounds, no rattle
+        c.click(0, 0);
+        render(e, 2400);
+        c.click(0, ms(500));
+        float[] slow = render(e, 24000);
+        check("auto: slow clicks play single sounds", !c.isLooping() && onsets(slow).size() == 1);
+        // then a 20 CPS hold: rattle starts by the 3rd click
+        long t = fakeNanos;
+        for (int k = 0; k < 6; k++) c.click(0, t + k * ms(50));
+        check("auto: fast clicking switches to the rattle", c.isLooping());
+        c.tick(t + ms(250) + ms(200)); // past the 120 ms hold timeout
+        check("auto: rattle stops when clicking stops", !c.isLooping());
+    }
+
+    private static void otherKeysSkipHandledAndPairRelease() {
+        AudioEngine e = engineWithImpulse(Sound.OTHER_DOWN, Sound.OTHER_UP);
+        Timing timing = new Timing();
+        timing.keyJitterMs = 0;
+        meowtils.extension.soundgen.input.KeyboardChannel k =
+                new meowtils.extension.soundgen.input.KeyboardChannel(e, timing, Sound.OTHER_DOWN, Sound.OTHER_UP);
+        k.minHoldMs = 30;
+        k.update(33, true, true, false, 0);          // F pressed: sounds
+        k.update(17, true, true, true, 0);           // W owned by its own channel: silent
+        k.update(33, false, true, false, ms(100));   // F released: release sounds
+        k.update(17, false, true, true, ms(100));    // W released: silent (its press never sounded)
+        k.update(2, true, false, false, ms(200));    // "1" while not allowed: silent
+        k.update(2, false, true, false, ms(250));    //   ...and so is its release
+        List<Integer> on = onsets(render(e, 24000));
+        check("other keys: F press+release only, got " + on, on.size() == 2 && on.get(0) == 0 && on.get(1) == 4800);
+        check("other keys: one press counted", k.takePresses() == 1);
     }
 
     private static void cpuCost() {

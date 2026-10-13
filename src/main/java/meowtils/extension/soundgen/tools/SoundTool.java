@@ -237,6 +237,8 @@ public final class SoundTool {
             case DRAG:
             case BUTTERFLY:
                 return 40;
+            case RIGHT_CLICK:
+                return 20;
             case DRAG_LOOP:
                 return 6;
             case DRAG_END:

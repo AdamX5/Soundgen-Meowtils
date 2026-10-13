@@ -15,15 +15,26 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
  * - CLICKS: one sample per detected click.
  * - LOOP:   a continuous recorded rattle that runs while clicks keep arriving and fades out
  *           when they stop (or immediately on release, for held-state sources).
+ * - AUTO:   single-click sounds while clicking slowly; switches to the LOOP rattle once the
+ *           click rate passes the drag threshold (fast place, drag clicking), and back again
+ *           when it stops.
+ *
+ * Choke: each new click fades out the previous click's tail, so very fast clicking stays
+ * crisp instead of piling up into a smear.
  */
 public final class ClickChannel {
     public static final int STYLE_CLICKS = 0;
     public static final int STYLE_LOOP = 1;
+    public static final int STYLE_AUTO = 2;
     private static final int LOOP_FADE_MS = 12;
+    /** AUTO measures the click rate over this window. */
+    static final long RATE_WINDOW_NANOS = 300_000_000L;
+    private static final int HISTORY = 32;
 
     private final AudioEngine engine;
     private final Timing timing;
     private final Sound click;
+    private final Sound single;
     private final Sound loop;
     private final Sound end;
     private final int tag;
@@ -39,40 +50,89 @@ public final class ClickChannel {
     public volatile float gain = 1f;
     public volatile int holdTimeoutMs = 120;
     public volatile boolean endClick = true;
+    public volatile boolean choke = true;
+    /** AUTO switches to the rattle at or above this many clicks per second. */
+    public volatile int dragThresholdCps = 8;
 
     private final AtomicInteger pending = new AtomicInteger();
+    private final AtomicInteger pendingSingle = new AtomicInteger();
     private final AtomicBoolean looping = new AtomicBoolean();
     private volatile long lastActivity;
+    private final long[] history = new long[HISTORY]; // guarded by itself
+    private int historyPos;
 
-    public ClickChannel(AudioEngine engine, Timing timing, Sound click, Sound loop, Sound end, int tag, boolean[] tickBound) {
+    /**
+     * @param click  sample for CLICKS style
+     * @param single sample for AUTO style's slow clicks
+     * @param loop   rattle for LOOP / AUTO
+     * @param end    optional click when a rattle stops
+     * @param tag    unique per channel: loop identity and choke group
+     */
+    public ClickChannel(AudioEngine engine, Timing timing, Sound click, Sound single, Sound loop, Sound end, int tag,
+                        boolean[] tickBound) {
         this.engine = engine;
         this.timing = timing;
         this.click = click;
+        this.single = single;
         this.loop = loop;
         this.end = end;
         this.tag = tag;
         this.tickBound = tickBound.clone();
         this.held = new boolean[tickBound.length];
         this.counts = new AtomicIntegerArray(tickBound.length);
+        java.util.Arrays.fill(history, Long.MIN_VALUE);
     }
 
     /** A discrete click seen by {@code source}. Safe from any thread. */
     public void click(int source, long now) {
         counts.incrementAndGet(source);
         if (!enabled || source != method) return;
-        if (style == STYLE_LOOP) {
+        int s = style;
+        if (s == STYLE_LOOP) {
             lastActivity = now;
-            if (looping.compareAndSet(false, true)) engine.loopStart(loop, tag, gain, now);
-        } else if (timing.spread && tickBound[source]) {
-            pending.incrementAndGet();
+            startLoop(now);
+        } else if (s == STYLE_AUTO) {
+            lastActivity = now;
+            if (rateAtLeast(now, dragThresholdCps)) {
+                startLoop(now);
+            } else if (!looping.get()) {
+                hit(single, pendingSingle, source, now);
+            }
         } else {
-            engine.play(click, gain, now + timing.clickJitter());
+            hit(click, pending, source, now);
         }
+    }
+
+    private void hit(Sound sound, AtomicInteger spreadCounter, int source, long now) {
+        if (timing.spread && tickBound[source]) {
+            spreadCounter.incrementAndGet();
+        } else {
+            engine.play(sound, gain, now + timing.clickJitter(), chokeGroup());
+        }
+    }
+
+    /** Records this click and reports whether the recent rate reaches {@code cps}. */
+    private boolean rateAtLeast(long now, int cps) {
+        synchronized (history) {
+            history[historyPos] = now;
+            historyPos = (historyPos + 1) % HISTORY;
+            int n = 0;
+            for (long t : history) if (t != Long.MIN_VALUE && now - t < RATE_WINDOW_NANOS) n++;
+            return n * 1_000_000_000L >= (long) cps * RATE_WINDOW_NANOS;
+        }
+    }
+
+    private void startLoop(long now) {
+        if (looping.compareAndSet(false, true)) engine.loopStart(loop, tag, gain, now);
+    }
+
+    private int chokeGroup() {
+        return choke ? tag : 0;
     }
 
     /**
      * Polled held state for sources that only know "down or up" (keybind, raw mouse).
-     * A press edge counts as one click; in loop style, holding keeps the loop alive and
+     * A press edge counts as one click; while a rattle runs, holding keeps it alive and
      * releasing stops it at once. Client thread only.
      */
     public void held(int source, boolean down, long now) {
@@ -80,7 +140,7 @@ public final class ClickChannel {
         held[source] = down;
         if (down && !was) {
             click(source, now);
-        } else if (enabled && source == method && style == STYLE_LOOP) {
+        } else if (enabled && source == method && style != STYLE_CLICKS && looping.get()) {
             if (down) {
                 lastActivity = now;
             } else if (was) {
@@ -91,31 +151,44 @@ public final class ClickChannel {
 
     /** Call once per client tick after that tick's events (tick POST). Client thread only. */
     public void tick(long now) {
-        int n = pending.getAndSet(0);
-        if (n > 0) {
-            // Everything the game processed this tick happened at one instant; space it out
-            // over the following tick in order, with a little randomness in each slot.
-            for (int k = 0; k < n; k++) {
-                double slot = (k + 0.5 + (Timing.unit() - 0.5) * 0.6) / n;
-                engine.play(click, gain, now + (long) (slot * Timing.TICK_NANOS) + timing.clickJitter());
-            }
-        }
-        if (looping.get() && (style != STYLE_LOOP || !enabled || now - lastActivity > holdTimeoutMs * 1_000_000L)) {
+        flush(click, pending, now);
+        flush(single, pendingSingle, now);
+        if (looping.get() && (style == STYLE_CLICKS || !enabled || now - lastActivity > holdTimeoutMs * 1_000_000L)) {
             stopLoop(now);
+        }
+    }
+
+    /**
+     * Everything the game processed this tick happened at one instant; space it out over the
+     * following tick in order, with a little randomness in each slot.
+     */
+    private void flush(Sound sound, AtomicInteger counter, long now) {
+        int n = counter.getAndSet(0);
+        for (int k = 0; k < n; k++) {
+            double slot = (k + 0.5 + (Timing.unit() - 0.5) * 0.6) / n;
+            engine.play(sound, gain, now + (long) (slot * Timing.TICK_NANOS) + timing.clickJitter(), chokeGroup());
         }
     }
 
     public void stopLoop(long now) {
         if (looping.compareAndSet(true, false)) {
             engine.loopStop(tag, LOOP_FADE_MS, now);
-            if (endClick) engine.play(end, gain, now);
+            if (endClick) engine.play(end, gain, now, chokeGroup());
         }
+    }
+
+    public boolean isLooping() {
+        return looping.get();
     }
 
     public void reset() {
         pending.set(0);
+        pendingSingle.set(0);
         looping.set(false);
         java.util.Arrays.fill(held, false);
+        synchronized (history) {
+            java.util.Arrays.fill(history, Long.MIN_VALUE);
+        }
     }
 
     /** Clicks seen by {@code source} since the last call (for the debug readout). */

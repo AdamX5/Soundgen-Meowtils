@@ -28,6 +28,7 @@ import java.util.zip.ZipOutputStream;
  *
  *   java buildtools/Build.java            build + self-test + package
  *   java buildtools/Build.java --no-test  skip the self-test
+ *   java buildtools/Build.java --install  also install into the live game (see installLive)
  *
  * Steps:
  *  1. download the Meowtils jar into libs/ if missing (compile reference + ASM for step 4)
@@ -50,6 +51,7 @@ public final class Build {
 
     public static void main(String[] args) throws Exception {
         boolean test = !Arrays.asList(args).contains("--no-test");
+        boolean install = Arrays.asList(args).contains("--install");
         Path root = Paths.get("").toAbsolutePath();
         if (!Files.isRegularFile(root.resolve("VERSION"))) {
             fail("run this from the project folder (the one containing VERSION)");
@@ -115,6 +117,8 @@ public final class Build {
         Path zip = build.resolve("SoundGen-" + version + "-dropin.zip");
         zipTree(dropin, zip);
 
+        if (install) installLive(jar);
+
         step("done");
         System.out.println("  extension : " + root.relativize(jar));
         System.out.println("  package   : " + root.relativize(dropin) + "  (zipped: " + root.relativize(zip) + ")");
@@ -148,6 +152,45 @@ public final class Build {
                 "",
                 "Full guide: docs/GUIDE.md in the GitHub repository.",
                 "");
+    }
+
+    /**
+     * Copies the extension into the live game's meowtils/extensions folder, replacing older
+     * SoundGen-*.meowtils files only; other extensions are never touched.
+     * Game directory: SOUNDGEN_GAME_DIR if set, else %APPDATA%\.minecraft (Lunar's default),
+     * else ~/.minecraft. Refuses unless meowtils/meowtils.json exists there, so it can't
+     * write into the wrong place.
+     */
+    static void installLive(Path jar) throws IOException {
+        String override = System.getenv("SOUNDGEN_GAME_DIR");
+        String appData = System.getenv("APPDATA");
+        Path game = override != null && !override.trim().isEmpty() ? Paths.get(override.trim())
+                : appData != null ? Paths.get(appData, ".minecraft")
+                : Paths.get(System.getProperty("user.home"), ".minecraft");
+        Path meowtils = game.resolve("meowtils");
+        if (!Files.isRegularFile(meowtils.resolve("meowtils.json"))) {
+            fail("--install: no meowtils/meowtils.json under " + game
+                    + " (set SOUNDGEN_GAME_DIR to the folder that contains your meowtils folder)");
+        }
+        Path ext = meowtils.resolve("extensions");
+        Files.createDirectories(ext);
+        step("installing into " + ext);
+        try (Stream<Path> old = Files.list(ext)) {
+            for (Path p : (Iterable<Path>) old::iterator) {
+                String n = p.getFileName().toString();
+                if (n.startsWith("SoundGen-") && n.endsWith(".meowtils") && !n.equals(jar.getFileName().toString())) {
+                    System.out.println("  removing old " + n);
+                    Files.delete(p);
+                }
+            }
+        }
+        try {
+            Files.copy(jar, ext.resolve(jar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            fail("--install: could not write " + ext.resolve(jar.getFileName())
+                    + " (is the game running? close it and try again): " + e.getMessage());
+        }
+        System.out.println("  installed " + jar.getFileName() + ". Restart the game to load it.");
     }
 
     // ------------------------------------------------------------------ helpers

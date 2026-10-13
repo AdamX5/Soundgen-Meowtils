@@ -114,6 +114,7 @@ build.bat
 - Output: `build\libs\SoundGen-<version>.meowtils`, the install package `build\dropin\` (the same two folders as the release zip), and `build\SoundGen-<version>-dropin.zip`.
 - Install exactly as in 1.2, using the folders in `build\dropin\`.
 - `build.bat --no-test` skips the self-test for a faster build.
+- `build.bat --install` also copies the new `.meowtils` straight into `%APPDATA%\.minecraft\meowtils\extensions`, replacing only older SoundGen files (other extensions are never touched). Close the game first, then restart it afterwards. A different game folder can be set with the environment variable `SOUNDGEN_GAME_DIR`.
 
 You don't need to publish anything by hand: pushing to GitHub builds automatically, and bumping `VERSION` publishes a new release (see `HANDOFF.md`).
 
@@ -186,8 +187,10 @@ Hearing the same recording twice in a row is the fastest way for ASMR to sound f
 |---|---|---|
 | `butterfly` | 40+ (60–100 is great) | the one you'll hear most |
 | `drag` | 40+ | only used when Right Style = Clicks |
-| `drag_loop` | 6+ takes, 2–5 s each | used when Right Style = Loop |
+| `drag_loop` | 6+ takes, 2–5 s each | used when Right Style = Loop or Auto |
 | `drag_end` | 8+ | the final clack when a drag stops (optional) |
+| `right_click` | 20+ | single right clicks for Right Style = Auto (falls back to `drag`) |
+| `other_down` / `other_up` | 20+ each | every other key: hotbar, Esc, chat typing (falls back to `key_down`/`key_up`) |
 | `key_down` / `key_up` | 20+ each | shared by every key that has no folder of its own |
 | `space_*`, `shift_*`, `w_*` … | 12+ each | optional per-key overrides |
 
@@ -344,6 +347,11 @@ This renders the slot through the real engine (same shuffle order, same volume a
 | Volume Variation | random ± loudness per hit | 10 % |
 | Pitch Variation | random ± speed and pitch per hit | 3 % |
 | Click Jitter / Key Jitter | random timing offset per hit | 3 / 6 ms |
+| Left Choke / Right Choke | a new click fades out the previous click's tail, so fast clicking stays crisp | on |
+| Choke Fade | how quickly that tail is faded | 3 ms |
+| Right Style | Clicks / Loop / **Auto** (single clicks when slow, drag rattle once fast) | Auto |
+| Drag Threshold | CPS at which Auto switches to the rattle | 8 |
+| Other Keys | sounds for every other key; Where = Everywhere (incl. chat) or In Game | on, Everywhere |
 
 **Multiple packs.** To compare two mice or two keyboards, make `packs/mouseA` and `packs/mouseB` (`soundtool init`), fill both, and switch with **Sound Pack** + **Reload Sounds**.
 

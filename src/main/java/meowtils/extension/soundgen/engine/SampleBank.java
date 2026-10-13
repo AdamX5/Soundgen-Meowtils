@@ -235,8 +235,11 @@ public final class SampleBank {
             w.println("  soundtool split take.wav <this pack>/key_down --alternate <this pack>/key_up");
             w.println("Check a pack:  soundtool report <this pack>");
             w.println();
-            w.println("Per-key folders (w_down, space_up, ...) are optional: empty ones use key_down /");
-            w.println("key_up. drag_end uses drag. Slots with nothing at all use a synthesised placeholder.");
+            w.println("Per-key folders (w_down, space_up, other_down, ...) are optional: empty ones use");
+            w.println("key_down / key_up. drag_end and right_click use drag. Slots with nothing at all use a");
+            w.println("synthesised placeholder.");
+            w.println("right_click = single right clicks (Right Style Auto, slow clicking).");
+            w.println("other_down / other_up = every other key: hotbar, Esc, chat typing...");
             w.println();
             w.println("After adding files press 'Reload Sounds' in the module settings (Sounds section).");
         } catch (IOException e) {

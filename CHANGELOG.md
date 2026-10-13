@@ -3,6 +3,26 @@
 Each `## <version>` section becomes the GitHub release notes when that version is published
 (see `.github/workflows/build.yml`). Newest first.
 
+## 0.2.0
+
+From the first in-game test (Lunar, 0.1.1):
+
+- **Choke** (Left Choke / Right Choke, on by default): each new click fades out the previous
+  click's tail over **Choke Fade** (Timing, default 3 ms). Very fast butterfly clicking or an
+  auto clicker stays crisp instead of piling up.
+- **Right Style "Auto"** (new default): single `right_click` sounds while clicking slowly,
+  switching to the drag rattle once the rate reaches **Drag Threshold** (default 8 CPS), e.g.
+  holding right click with fast place. New sound folder `right_click` (falls back to `drag`).
+  Existing configs keep their old style: switch Right Style to Auto to try it.
+- **Other Keys**: every other keyboard key now clicks too (hotbar 1-0, perspective, Esc, E, Q,
+  chat typing...). Keys owned by the W/A/S/D/Space/Shift/Sprint channels are skipped in game.
+  "Where": Everywhere (includes menus and chat) or In Game. New folders `other_down` /
+  `other_up` (fall back to `key_down` / `key_up`).
+- Buttons now use Meowtils' standard size (the text was tiny). "Apply Output" renamed
+  "Apply Device".
+- `build.bat --install`: builds and copies the extension straight into the live
+  `.minecraft\meowtils\extensions`, replacing only older SoundGen files.
+
 ## 0.1.1
 
 - Install package reorganised into two folders named after their destination:

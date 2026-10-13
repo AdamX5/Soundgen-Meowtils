@@ -20,6 +20,7 @@ F net/minecraft/client/Minecraft                                     thePlayer  
 F net/minecraft/client/Minecraft                                     theWorld         field_71441_e   [meowtils]
 F net/minecraft/client/Minecraft                                     gameSettings     field_71474_y   [meowtils]
 F net/minecraft/client/Minecraft                                     inGameHasFocus   field_71415_G   [meowtils]
+F net/minecraft/client/Minecraft                                     currentScreen    field_71462_r   [meowtils]
 M net/minecraft/client/Minecraft                                     getMinecraft     func_71410_x    [meowtils]
 F net/minecraft/client/entity/EntityPlayerSP                         movementInput    field_71158_b   [csv]
 F net/minecraft/util/MovementInput                                   moveStrafe       field_78902_a   [csv]

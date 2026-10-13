@@ -13,6 +13,8 @@ public enum Sound {
     DRAG("drag", null, Placeholder.MOUSE, false),
     DRAG_LOOP("drag_loop", null, Placeholder.RATTLE, true),
     DRAG_END("drag_end", DRAG, Placeholder.MOUSE, false),
+    /** Single right clicks in AUTO style (slow clicking); empty folder uses drag. */
+    RIGHT_CLICK("right_click", DRAG, Placeholder.MOUSE, false),
     BUTTERFLY("butterfly", null, Placeholder.MOUSE, false),
 
     KEY_DOWN("key_down", null, Placeholder.KEY_DOWN, false),
@@ -30,7 +32,10 @@ public enum Sound {
     SHIFT_DOWN("shift_down", KEY_DOWN, Placeholder.MOD_DOWN, false),
     SHIFT_UP("shift_up", KEY_UP, Placeholder.MOD_UP, false),
     SPRINT_DOWN("sprint_down", KEY_DOWN, Placeholder.MOD_DOWN, false),
-    SPRINT_UP("sprint_up", KEY_UP, Placeholder.MOD_UP, false);
+    SPRINT_UP("sprint_up", KEY_UP, Placeholder.MOD_UP, false),
+    /** Every other keyboard key (hotbar, F5/perspective, Esc, chat typing, ...). */
+    OTHER_DOWN("other_down", KEY_DOWN, Placeholder.KEY_DOWN, false),
+    OTHER_UP("other_up", KEY_UP, Placeholder.KEY_UP, false);
 
     public final String folder;
     public final Sound fallback;

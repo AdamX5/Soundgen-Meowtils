@@ -6,6 +6,7 @@ import meowtils.extension.soundgen.engine.SampleSet;
 import meowtils.extension.soundgen.engine.Sound;
 import meowtils.extension.soundgen.input.ClickChannel;
 import meowtils.extension.soundgen.input.KeyChannel;
+import meowtils.extension.soundgen.input.KeyboardChannel;
 import meowtils.extension.soundgen.input.Timing;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -73,7 +74,9 @@ public class SoundGen extends Extension {
     static final List<String> SPRINT_METHODS = Arrays.asList("Keybind", "Player", "Raw Key", "Packet");
     static final int SP_KEYBIND = 0, SP_PLAYER = 1, SP_RAW = 2, SP_PACKET = 3;
 
-    static final List<String> CLICK_STYLES = Arrays.asList("Clicks", "Loop");
+    static final List<String> CLICK_STYLES = Arrays.asList("Clicks", "Loop", "Auto");
+    static final List<String> OTHER_WHERE = Arrays.asList("Everywhere", "In Game");
+    static final List<String> OTHER_RELEASE = Arrays.asList("Real", "Off");
     static final List<String> RELEASE_MODES = Arrays.asList("Real", "Synthetic", "Off");
     static final List<String> TIMING_MODES = Arrays.asList("Spread", "Instant");
     static final List<String> SELECTION_MODES = Arrays.asList("Shuffle", "Random");
@@ -100,13 +103,16 @@ public class SoundGen extends Extension {
 
     @Config public String timingMode = "Spread";
     @Config public int clickJitterMs = 3;
+    @Config public int chokeFadeMs = 3;
     @Config public int keyJitterMs = 6;
     @Config public int volumeVariation = 10;
     @Config public int pitchVariation = 3;
 
     @Config public boolean rightEnabled = true;
     @Config public String rightMethod = "Game Click";
-    @Config public String rightStyle = "Clicks";
+    @Config public String rightStyle = "Auto";
+    @Config public int rightDragThreshold = 8;
+    @Config public boolean rightChoke = true;
     @Config public int rightVolume = 100;
     @Config public int rightHoldTimeoutMs = 120;
     @Config public boolean rightEndClick = true;
@@ -114,6 +120,11 @@ public class SoundGen extends Extension {
     @Config public boolean leftEnabled = true;
     @Config public String leftMethod = "Game Click";
     @Config public int leftVolume = 100;
+    @Config public boolean leftChoke = true;
+
+    @Config public boolean otherEnabled = true;
+    @Config public String otherWhere = "Everywhere";
+    @Config public String otherRelease = "Real";
 
     @Config public int keysVolume = 100;
     @Config public int syntheticReleaseMs = 80;
@@ -145,8 +156,13 @@ public class SoundGen extends Extension {
 
     private final AudioEngine engine = new AudioEngine();
     private final Timing timing = new Timing();
-    private final ClickChannel right = new ClickChannel(engine, timing, Sound.DRAG, Sound.DRAG_LOOP, Sound.DRAG_END, 1, RIGHT_TICK_BOUND);
-    private final ClickChannel left = new ClickChannel(engine, timing, Sound.BUTTERFLY, Sound.BUTTERFLY, Sound.BUTTERFLY, 2, LEFT_TICK_BOUND);
+    private final ClickChannel right = new ClickChannel(engine, timing, Sound.DRAG, Sound.RIGHT_CLICK, Sound.DRAG_LOOP,
+            Sound.DRAG_END, 1, RIGHT_TICK_BOUND);
+    private final ClickChannel left = new ClickChannel(engine, timing, Sound.BUTTERFLY, Sound.BUTTERFLY, Sound.BUTTERFLY,
+            Sound.BUTTERFLY, 2, LEFT_TICK_BOUND);
+    private final KeyboardChannel otherKeys = new KeyboardChannel(engine, timing, Sound.OTHER_DOWN, Sound.OTHER_UP);
+    /** Key codes owned by other channels this frame (so Other Keys skips them). */
+    private final int[] handledKeys = new int[9];
     private final KeyChannel w = new KeyChannel(engine, timing, Sound.W_DOWN, Sound.W_UP, MOVE_METHODS.size());
     private final KeyChannel a = new KeyChannel(engine, timing, Sound.A_DOWN, Sound.A_UP, MOVE_METHODS.size());
     private final KeyChannel s = new KeyChannel(engine, timing, Sound.S_DOWN, Sound.S_UP, MOVE_METHODS.size());
@@ -170,8 +186,8 @@ public class SoundGen extends Extension {
         expand("Output", e -> {
             e.text("Output Device", "outputDevice");
             e.slider("Buffer", 5, 100, 1, "ms", "bufferMs", int.class);
-            e.button("Apply Output", 1f, this::restartAudio);
-            e.button("List Devices", 1f, this::listDevices);
+            e.button("Apply Device", 5f, this::restartAudio);
+            e.button("List Devices", 5f, this::listDevices);
         });
 
         expand("Sounds", e -> {
@@ -179,13 +195,14 @@ public class SoundGen extends Extension {
             e.mode("Variation Order", SELECTION_MODES, "selection");
             e.check("Auto Trim", "autoTrim");
             e.check("Match Levels", "matchLevels");
-            e.button("Reload Sounds", 1f, this::reloadSounds);
-            e.button("Test Sounds", 1f, this::testSounds);
+            e.button("Reload Sounds", 5f, this::reloadSounds);
+            e.button("Test Sounds", 5f, this::testSounds);
         });
 
         expand("Timing", e -> {
             e.mode("Click Timing", TIMING_MODES, "timingMode");
             e.slider("Click Jitter", 0, 20, 1, "ms", "clickJitterMs", int.class);
+            e.slider("Choke Fade", 1, 20, 1, "ms", "chokeFadeMs", int.class);
             e.slider("Key Jitter", 0, 30, 1, "ms", "keyJitterMs", int.class);
             e.slider("Volume Variation", 0, 40, 1, "%", "volumeVariation", int.class);
             e.slider("Pitch Variation", 0, 10, 1, "%", "pitchVariation", int.class);
@@ -195,6 +212,8 @@ public class SoundGen extends Extension {
             e.check("Right Sound", "rightEnabled");
             e.mode("Right Read", RIGHT_METHODS, "rightMethod");
             e.mode("Right Style", CLICK_STYLES, "rightStyle");
+            e.slider("Drag Threshold", 3, 20, 1, "CPS", "rightDragThreshold", int.class);
+            e.check("Right Choke", "rightChoke");
             e.slider("Right Volume", 0, 200, 5, "%", "rightVolume", int.class);
             e.slider("Loop Hold Timeout", 60, 300, 5, "ms", "rightHoldTimeoutMs", int.class);
             e.check("Loop End Click", "rightEndClick");
@@ -203,6 +222,7 @@ public class SoundGen extends Extension {
         expand("Left Click (Butterfly)", e -> {
             e.check("Left Sound", "leftEnabled");
             e.mode("Left Read", LEFT_METHODS, "leftMethod");
+            e.check("Left Choke", "leftChoke");
             e.slider("Left Volume", 0, 200, 5, "%", "leftVolume", int.class);
         });
 
@@ -218,6 +238,12 @@ public class SoundGen extends Extension {
         keyExpand("Space", "space", JUMP_METHODS);
         keyExpand("Shift", "shift", SNEAK_METHODS);
         keyExpand("Sprint", "sprint", SPRINT_METHODS);
+
+        expand("Other Keys", e -> {
+            e.check("Other Keys Sound", "otherEnabled");
+            e.mode("Other Keys Where", OTHER_WHERE, "otherWhere");
+            e.mode("Other Keys Release", OTHER_RELEASE, "otherRelease");
+        });
     }
 
     private void keyExpand(String label, String prefix, List<String> methods) {
@@ -248,6 +274,7 @@ public class SoundGen extends Extension {
         right.reset();
         left.reset();
         for (KeyChannel k : keyChannels) k.reset();
+        otherKeys.reset();
         wasOnGround = true;
     }
 
@@ -314,6 +341,7 @@ public class SoundGen extends Extension {
         engine.setGainJitter(volumeVariation / 100f);
         engine.setPitchJitter(pitchVariation / 100f);
         engine.setSelection(index(SELECTION_MODES, selection) == 1 ? SampleSet.RANDOM : SampleSet.SHUFFLE);
+        engine.setChokeFadeMs(chokeFadeMs);
 
         timing.spread = !"Instant".equals(timingMode);
         timing.clickJitterMs = clickJitterMs;
@@ -325,11 +353,19 @@ public class SoundGen extends Extension {
         right.gain = rightVolume / 100f;
         right.holdTimeoutMs = rightHoldTimeoutMs;
         right.endClick = rightEndClick;
+        right.dragThresholdCps = rightDragThreshold;
+        right.choke = rightChoke;
 
         left.enabled = leftEnabled;
         left.method = index(LEFT_METHODS, leftMethod);
         left.style = ClickChannel.STYLE_CLICKS;
         left.gain = leftVolume / 100f;
+        left.choke = leftChoke;
+
+        otherKeys.enabled = otherEnabled;
+        otherKeys.release = index(OTHER_RELEASE, otherRelease) == 0;
+        otherKeys.gain = keysVolume / 100f;
+        otherKeys.minHoldMs = minHoldMs;
 
         applyKey(w, wEnabled, MOVE_METHODS, wMethod, wRelease);
         applyKey(a, aEnabled, MOVE_METHODS, aMethod, aRelease);
@@ -417,6 +453,45 @@ public class SoundGen extends Extension {
         space.state(J_RAW, focus && raw(mc.gameSettings.keyBindJump), now);
         shift.state(SN_RAW, focus && raw(mc.gameSettings.keyBindSneak), now);
         sprint.state(SP_RAW, focus && raw(mc.gameSettings.keyBindSprint), now);
+        pollOtherKeys(now);
+    }
+
+    /**
+     * Every keyboard key not owned by another channel. In game, keys bound to an enabled
+     * W/A/S/D/Space/Shift/Sprint channel (or to attack/use) are skipped; in menus and chat
+     * every key counts, so typing sounds like typing.
+     */
+    private void pollOtherKeys(long now) {
+        boolean inGame = mc.currentScreen == null;
+        boolean allowed = inGame || index(OTHER_WHERE, otherWhere) == 0;
+        int n = 0;
+        if (inGame) {
+            n = addHandled(n, wEnabled, mc.gameSettings.keyBindForward);
+            n = addHandled(n, aEnabled, mc.gameSettings.keyBindLeft);
+            n = addHandled(n, sEnabled, mc.gameSettings.keyBindBack);
+            n = addHandled(n, dEnabled, mc.gameSettings.keyBindRight);
+            n = addHandled(n, spaceEnabled, mc.gameSettings.keyBindJump);
+            n = addHandled(n, shiftEnabled, mc.gameSettings.keyBindSneak);
+            n = addHandled(n, sprintEnabled, mc.gameSettings.keyBindSprint);
+            n = addHandled(n, rightEnabled, mc.gameSettings.keyBindUseItem);
+            n = addHandled(n, leftEnabled, mc.gameSettings.keyBindAttack);
+        }
+        for (int key = 1; key < KeyboardChannel.KEYS; key++) {
+            boolean handled = false;
+            for (int i = 0; i < n; i++) {
+                if (handledKeys[i] == key) {
+                    handled = true;
+                    break;
+                }
+            }
+            otherKeys.update(key, Keyboard.isKeyDown(key), allowed, handled, now);
+        }
+    }
+
+    private int addHandled(int n, boolean channelOn, KeyBinding binding) {
+        int code = binding.getKeyCode();
+        if (channelOn && code > 0) handledKeys[n++] = code;
+        return n;
     }
 
     @EventTarget
@@ -494,6 +569,7 @@ public class SoundGen extends Extension {
             right.clearCounts();
             left.clearCounts();
             for (KeyChannel k : keyChannels) k.clearCounts();
+            otherKeys.takePresses();
             return;
         }
         String r = counts(right, CLICK_SHORT_R);
@@ -501,12 +577,15 @@ public class SoundGen extends Extension {
         String sh = counts(shift, SNEAK_SHORT);
         String sp = counts(space, JUMP_SHORT);
         for (KeyChannel k : keyChannels) k.clearCounts();
+        int other = otherKeys.takePresses();
         if (r != null || l != null) {
             Meowtils.addMessage("§8[§dSG§8] §7R/s " + (r == null ? "-" : r) + " §8| §7L/s " + (l == null ? "-" : l));
         }
         if (sh != null || sp != null) {
             Meowtils.addMessage("§8[§dSG§8] §7Shift " + (sh == null ? "-" : sh) + " §8| §7Space " + (sp == null ? "-" : sp));
         }
+        if (other > 0) Meowtils.addMessage("§8[§dSG§8] §7Other keys " + other + "/s");
+        if (right.isLooping()) Meowtils.addMessage("§8[§dSG§8] §7Right: drag rattle on");
         if (engine.consumeClipped()) Meowtils.addMessage("§8[§dSG§8] §coutput clipped, lower the volume");
     }
 

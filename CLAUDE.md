@@ -8,6 +8,7 @@ SoundGen is a Meowtils extension (Minecraft 1.8.9, Lunar/Forge). It turns what t
 build.bat                 # Windows: full build + self-test + package
 ./build.sh                # macOS/Linux
 build.bat --no-test       # faster, skips the self-test
+build.bat --install       # build + copy into the live game's meowtils\extensions
 soundtool.bat <cmd> ...   # sound tool, after a build
 ```
 
@@ -45,11 +46,26 @@ The user wants GitHub to hold every version of the `.meowtils` file. The CI (`.g
 - **The audio thread** must never lock, allocate, or touch the disk.
 - **Tests.** Add or extend checks in `src/test/java/.../EngineSelfTest.java` for any engine, input or tool change. It runs in every build.
 
+## The live game folder (on the user's PC)
+
+```
+C:\Users\Adam\AppData\Roaming\.minecraft\meowtils\        (= %APPDATA%\.minecraft\meowtils)
+├── extensions\SoundGen-<version>.meowtils   ← installed build (plus the user's OTHER extensions: never delete those)
+├── soundgen\packs\<pack>\<slot>\*.wav       ← the user's recordings
+├── meowtils.log                              ← read this first when something doesn't work
+└── meowtils.json                             ← Meowtils config (SoundGen's settings are saved here)
+```
+
+- **Don't develop inside this folder.** The project lives in its own folder (cloned from GitHub). This folder is game data, shared with Meowtils and other extensions. Give Claude access to it with `/add-dir %APPDATA%\.minecraft\meowtils` so it can read `meowtils.log` and the packs.
+- **Installing a build:** `build.bat --install` replaces only older `SoundGen-*.meowtils`. The game must be closed while copying, then restarted to load the new version.
+- **Hands off** `%APPDATA%\lunarclient\Meowtils-Lunar\`: that's Lunar's loader for the Meowtils mod itself.
+
 ## Facts already established (don't re-derive them)
 
 - Extensions go in `<game dir>/meowtils/extensions/*.meowtils`. SoundGen's data goes in `<game dir>/meowtils/soundgen/packs/<pack>/<slot>/`.
 - Meowtils event hook points and the name-translation behaviour are listed in `HANDOFF.md`, section 2.
-- **Not yet tested in game.** Ask the user for Debug Readout lines and `meowtils/meowtils.log` excerpts when diagnosing.
+- **The extension runs in Lunar** (confirmed by the user on 0.1.1). The 0.2.0 features are not re-tested yet: see HANDOFF.md, section 6. Ask the user for Debug Readout lines, and read `meowtils.log`, when diagnosing.
+- Meowtils buttons use size `5f` (every Meowtils module does). Smaller values render unreadably small text.
 
 ## Working with the user
 
