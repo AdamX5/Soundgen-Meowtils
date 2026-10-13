@@ -18,10 +18,14 @@ import java.util.List;
 public final class SampleBank {
     /** Leading-edge threshold relative to the sample's peak for auto-trim (about -22 dB). */
     private static final float ONSET_THRESHOLD = 0.08f;
-    /** Tail threshold relative to peak (about -50 dB). */
-    private static final float TAIL_THRESHOLD = 0.003f;
-    private static final double PRE_ROLL_MS = 0.5;
-    private static final double FADE_OUT_MS = 3.0;
+    /** Tail threshold relative to peak (about -55 dB). */
+    private static final float TAIL_THRESHOLD = 0.0018f;
+    /** Room kept before the onset: the soft start of a press is part of its sound. */
+    private static final double PRE_ROLL_MS = 10.0;
+    private static final double FADE_IN_MS = 3.0;
+    /** Ring-out kept after the sound falls under the tail threshold. */
+    private static final double TAIL_PAD_MS = 30.0;
+    private static final double FADE_OUT_MS = 10.0;
     private static final double LOOP_CROSSFADE_MS = 10.0;
     /** Level matching never moves a variation by more than this (12 dB), so noise isn't boosted. */
     private static final float MAX_MATCH_GAIN = 4f;
@@ -170,10 +174,10 @@ public final class SampleBank {
         int end = in.length - 1;
         float tailLevel = peak * TAIL_THRESHOLD;
         while (end > onset && Math.abs(in[end]) < tailLevel) end--;
-        end = Math.min(in.length, end + 1 + ms(2));
+        end = Math.min(in.length, end + 1 + ms(TAIL_PAD_MS));
 
         float[] out = Arrays.copyOfRange(in, start, end);
-        int fadeIn = start > 0 ? Math.min(ms(PRE_ROLL_MS), out.length) : 0;
+        int fadeIn = start > 0 ? Math.min(ms(FADE_IN_MS), out.length) : 0;
         for (int i = 0; i < fadeIn; i++) out[i] *= i / (float) fadeIn;
         if (end < in.length) {
             int fadeOut = Math.min(ms(FADE_OUT_MS), out.length);

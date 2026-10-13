@@ -100,7 +100,7 @@ public final class SoundTool {
                 "      Every new take is cut into the right pack folders. Takes already imported",
                 "      are remembered (imported.txt) and skipped, so just add takes and run it again.",
                 "",
-                "  import-files <folder> <pack> [--dry-run]",
+                "  import-files <folder> <pack> [--dry-run] [--replace]",
                 "      For takes named by what they contain, all in one folder:",
                 "        quick-<sound>.wav          one-shot taps/clicks      (quick-small_keys, quick-click, ...)",
                 "        press_unpress-<sound>.wav  press, release, press...  (starts with a press, even count)",
@@ -109,6 +109,8 @@ public final class SoundTool {
                 "      <sound>: small_keys/key, space, shift, tab, backspace, click (mouse).",
                 "      Quiet recordings are fine: one shared gain (remembered in gain.txt) brings the",
                 "      loudest hit to -1 dB and keeps every other level relative to it.",
+                "      --replace: re-import every named take, first clearing the pack folders they",
+                "      fill (other folders are untouched). Use after a tool update.",
                 "",
                 "  report <pack>",
                 "      Per slot: variation count, levels, lengths, and problems to fix.",
@@ -395,10 +397,13 @@ public final class SoundTool {
 
     private static void importFiles(String[] args) throws IOException {
         boolean dryRun = false;
+        boolean replace = false;
         List<String> positional = new ArrayList<String>();
         for (String a : args) {
             if (a.equals("--dry-run")) {
                 dryRun = true;
+            } else if (a.equals("--replace")) {
+                replace = true;
             } else if (a.startsWith("--")) {
                 throw new IllegalArgumentException("unknown option " + a);
             } else {
@@ -412,7 +417,9 @@ public final class SoundTool {
 
         File list = new File(folder, IMPORTED_LIST);
         java.util.Set<String> done = new java.util.HashSet<String>();
-        if (list.isFile()) done.addAll(java.nio.file.Files.readAllLines(list.toPath(), java.nio.charset.StandardCharsets.UTF_8));
+        if (list.isFile() && !replace) {
+            done.addAll(java.nio.file.Files.readAllLines(list.toPath(), java.nio.charset.StandardCharsets.UTF_8));
+        }
 
         File[] wavs = folder.listFiles((d, n) -> n.toLowerCase().endsWith(".wav"));
         List<Plan> plans = new ArrayList<Plan>();
@@ -433,6 +440,22 @@ public final class SoundTool {
             return;
         }
         if (!dryRun) SampleBank.ensureLayout(pack, new ArrayList<String>());
+        if (replace && !dryRun) {
+            // Only the folders these takes fill are cleared; everything else in the pack stays.
+            java.util.Set<Sound> targets = new java.util.LinkedHashSet<Sound>();
+            for (Plan p : plans) {
+                targets.addAll(Arrays.asList(p.targets));
+                if (p.up != null) targets.add(p.up);
+            }
+            int removed = 0;
+            for (Sound t : targets) {
+                File[] old = new File(pack, t.folder).listFiles((d, n) -> n.toLowerCase().endsWith(".wav"));
+                if (old == null) continue;
+                for (File f : old) if (f.delete()) removed++;
+            }
+            System.out.println("--replace: cleared " + removed + " old files from " + targets.size() + " folders");
+            if (list.isFile() && !list.delete()) throw new IOException("could not reset " + list);
+        }
 
         // One gain for everything, so relative levels (space vs small keys, soft vs hard hits) stay real.
         float peak = 0;

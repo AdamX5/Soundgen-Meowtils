@@ -51,7 +51,7 @@ public final class ClickChannel {
     public volatile float gain = 1f;
     public volatile int holdTimeoutMs = 120;
     public volatile boolean endClick = true;
-    public volatile boolean choke = true;
+    public volatile boolean choke = false;
     /** How long a rattle takes to fade out after the clicking stops (no hard cut). */
     public volatile int loopFadeMs = 20;
     /** AUTO: play a drag_burst first (natural end) before committing to the loop. */

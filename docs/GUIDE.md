@@ -310,6 +310,8 @@ It needs Java installed once (Eclipse Temurin 21 from adoptium.net, tick "Add to
 
 To undo an import, delete the new files from the pack folder and remove the file's line from `recordings\imported.txt`.
 
+**After a SoundGen update that changes how sounds are cut** (e.g. 0.5.1, which keeps more room around each sound), double-click **`reimport-sounds.bat`**. It re-cuts every named take and replaces only the pack folders those takes fill; the saved gain is reused.
+
 **Folder layout (optional, for extra packs):** a sub-folder `recordings\<pack>\<sound>\*.wav` (e.g. `recordings\far\butterfly\take1.wav`) imports into `packs\<pack>`. Sound folder names: `butterfly`, `right_click`, `drag_loop`, `drag_end`, `key`, `space`, `shift`, `tab`, `backspace`.
 
 The rest of this part covers the same tool from the command line, for finer control.
@@ -421,8 +423,8 @@ This renders the slot through the real engine (same shuffle order, same volume a
 | Volume Variation | random ± loudness per hit | 10 % |
 | Pitch Variation | random ± speed and pitch per hit | 3 % |
 | Click Jitter / Key Jitter | random timing offset per hit | 3 / 6 ms |
-| Left Choke / Right Choke | a new click fades out the previous click's tail, so fast clicking stays crisp | on |
-| Choke Fade | how quickly that tail is faded | 3 ms |
+| Left Choke / Right Choke | a new click fades out the previous click's tail (crisper, but less natural) | off: sounds layer |
+| Choke Fade | how quickly that tail is faded when choke is on | 15 ms |
 | Right Style | Clicks / Loop / **Auto** (single clicks when slow, drag rattle once fast) | Auto |
 | Drag Threshold | CPS at which Auto switches to the rattle | 8 |
 | Other Keys | sounds for every other key; Where = Everywhere (incl. chat) or In Game | on, Everywhere |

@@ -116,6 +116,7 @@ public final class Build {
         // Recording helpers: double-click importer + the recordings folder it reads.
         Path soundgenData = dropin.resolve(DATA_FOLDER + "/soundgen");
         Files.write(soundgenData.resolve("import-sounds.bat"), crlf(root.resolve("buildtools/dropin/import-sounds.bat")));
+        Files.write(soundgenData.resolve("reimport-sounds.bat"), crlf(root.resolve("buildtools/dropin/reimport-sounds.bat")));
         Path recordings = soundgenData.resolve("recordings");
         Files.createDirectories(recordings);
         Files.write(recordings.resolve("README.txt"), crlf(root.resolve("buildtools/dropin/RECORDINGS-README.txt")));

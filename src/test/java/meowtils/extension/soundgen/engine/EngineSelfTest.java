@@ -46,6 +46,8 @@ public final class EngineSelfTest {
         importSortsTakesIntoThePack();
         namedFilesMapToTheRightSlots();
         importFilesHandlesQuietNamedTakes();
+        slicesKeepRoomAroundEachHit();
+        replaceReimportsOnlyItsFolders();
         tapModePlaysOneSound();
         autoPlaysBurstBeforeLoop();
         cpuCost();
@@ -110,8 +112,8 @@ public final class EngineSelfTest {
         float[] out = SampleBank.trim(in);
         int onset = 0;
         while (Math.abs(out[onset]) < 0.06f) onset++;
-        check("onset within 0.5 ms of start after trim (got " + onset + " frames)", onset <= 25);
-        check("tail trimmed", out.length < 1000);
+        check("trim keeps ~10 ms before the onset (got " + onset + " frames)", onset >= 470 && onset <= 500);
+        check("tail trimmed but keeps its ring-out (" + out.length + " frames)", out.length < 3000 && out.length > 1500);
     }
 
     private static void loopCrossfadeIsSeamless() {
@@ -499,6 +501,35 @@ public final class EngineSelfTest {
         } catch (IOException e) {
             return -1;
         }
+    }
+
+    private static void slicesKeepRoomAroundEachHit() {
+        int rate = 48000;
+        float[] x = new float[rate * 2];
+        int[] at = {9600, 9600 + 14400}; // two hits 300 ms apart, long-ish ring-out
+        for (int t : at) for (int i = 0; i < 9000; i++) x[t + i] += (float) (0.5 * Math.exp(-i / 900.0) * Math.sin(i * 0.5));
+        List<meowtils.extension.soundgen.tools.Splitter.Slice> sl =
+                meowtils.extension.soundgen.tools.Splitter.find(x, rate, new meowtils.extension.soundgen.tools.Splitter.Options());
+        boolean ok = sl.size() == 2
+                && sl.get(0).onset - sl.get(0).start >= 700                 // >= ~15 ms lead-in
+                && sl.get(0).end <= at[1]                                   // never runs into the next hit
+                && sl.get(1).end - at[1] > 4000;                            // ring-out kept (> 80 ms)
+        check("slices keep a lead-in and the ring-out, without swallowing the next hit", ok);
+    }
+
+    private static void replaceReimportsOnlyItsFolders() throws IOException {
+        File root = Files.createTempDirectory("sgreplace").toFile();
+        File rec = new File(root, "recordings"), pack = new File(root, "packs/default");
+        rec.mkdirs();
+        float[] taps = new float[48000 * 2];
+        for (int k = 0; k < 4; k++) for (int i = 0; i < 600; i++) taps[4800 + k * 19200 + i] = (float) (0.3 * Math.exp(-i / 70.0) * Math.sin(i * 0.9));
+        writeWav(new File(rec, "quick-small_keys.wav"), taps, 48000, 1, 1, 16, false);
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"import-files", rec.getPath(), pack.getPath()});
+        File keep = new File(pack, "butterfly/mine.wav");
+        writeWav(keep, taps, 48000, 1, 1, 16, false);
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"import-files", rec.getPath(), pack.getPath(), "--replace"});
+        check("--replace: re-imported (still 4 taps, not 8) and other folders untouched",
+                count(new File(pack, "key_tap")) == 4 && keep.isFile());
     }
 
     private static void tapModePlaysOneSound() {

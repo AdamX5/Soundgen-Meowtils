@@ -107,7 +107,7 @@ public class SoundGen extends Extension {
 
     @Config public String timingMode = "Spread";
     @Config public int clickJitterMs = 3;
-    @Config public int chokeFadeMs = 3;
+    @Config public int chokeFadeMs = 15;
     @Config public int keyJitterMs = 6;
     @Config public int volumeVariation = 10;
     @Config public int pitchVariation = 3;
@@ -116,7 +116,7 @@ public class SoundGen extends Extension {
     @Config public String rightMethod = "Game Click";
     @Config public String rightStyle = "Auto";
     @Config public int rightDragThreshold = 8;
-    @Config public boolean rightChoke = true;
+    @Config public boolean rightChoke = false; // off: sounds layer naturally
     @Config public int dragReleaseFadeMs = 20;
     @Config public boolean dragBursts = true;
     @Config public int burstWindowMs = 350;
@@ -127,7 +127,7 @@ public class SoundGen extends Extension {
     @Config public boolean leftEnabled = true;
     @Config public String leftMethod = "Game Click";
     @Config public int leftVolume = 100;
-    @Config public boolean leftChoke = true;
+    @Config public boolean leftChoke = false;
 
     @Config public boolean invEnabled = true;
     @Config public String invMethod = "Raw Mouse";
@@ -221,7 +221,7 @@ public class SoundGen extends Extension {
         expand("Timing", e -> {
             e.mode("Click Timing", TIMING_MODES, "timingMode");
             e.slider("Click Jitter", 0, 20, 1, "ms", "clickJitterMs", int.class);
-            e.slider("Choke Fade", 1, 20, 1, "ms", "chokeFadeMs", int.class);
+            e.slider("Choke Fade", 1, 60, 1, "ms", "chokeFadeMs", int.class);
             e.slider("Key Jitter", 0, 30, 1, "ms", "keyJitterMs", int.class);
             e.slider("Volume Variation", 0, 40, 1, "%", "volumeVariation", int.class);
             e.slider("Pitch Variation", 0, 10, 1, "%", "pitchVariation", int.class);

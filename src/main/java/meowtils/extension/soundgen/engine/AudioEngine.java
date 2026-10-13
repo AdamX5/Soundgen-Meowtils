@@ -48,7 +48,7 @@ public final class AudioEngine {
     private volatile float gainJitter = 0.1f;
     private volatile float pitchJitter = 0.03f;
     private volatile int selection = SampleSet.SHUFFLE;
-    private volatile int chokeFadeFrames = RATE * 3 / 1000;
+    private volatile int chokeFadeFrames = RATE * 15 / 1000;
 
     // Audio-thread state
     private long frameClock;

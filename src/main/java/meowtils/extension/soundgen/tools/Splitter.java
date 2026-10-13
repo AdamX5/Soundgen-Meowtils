@@ -23,9 +23,9 @@ public final class Splitter {
         /** Longest slice kept, in ms. */
         public double maxLengthMs = 400;
         /** Audio kept before each detected onset, in ms. */
-        public double preRollMs = 3;
+        public double preRollMs = 15;
         /** Audio kept after the sound drops below the off threshold, in ms. */
-        public double tailMs = 10;
+        public double tailMs = 60;
     }
 
     /** A detected slice: [start, end) in frames, plus its onset frame. */
@@ -63,7 +63,8 @@ public final class Splitter {
         Arrays.sort(sorted);
         float noise = sorted[(int) (blocks * 0.2)];
         float on = (float) Math.max(peak * Math.pow(10, -o.thresholdDb / 20), noise * 3.16);
-        float off = Math.max(on * 0.25f, noise * 2f);
+        float off = Math.max(on * 0.25f, noise * 2f);       // re-arm level between hits
+        float tailLevel = Math.max(on * 0.05f, noise * 1.5f); // keep the ring-out down to here (~-56 dB)
 
         List<Integer> onsets = new ArrayList<Integer>();
         int gapBlocks = (int) Math.max(1, o.minGapMs);
@@ -85,23 +86,23 @@ public final class Splitter {
         int preRoll = frames(o.preRollMs, rate);
         int tail = frames(o.tailMs, rate);
         int maxLen = frames(o.maxLengthMs, rate);
-        int prevEnd = 0;
         for (int k = 0; k < onsets.size(); k++) {
             int onset = onsets.get(k);
-            int start = Math.max(prevEnd, onset - preRoll);
+            // Slices may overlap in the source (each becomes its own file); a slice only has to
+            // stop before the next hit begins so it never contains two hits.
+            int start = Math.max(0, onset - preRoll);
             int hardEnd = Math.min(x.length, onset + maxLen);
-            if (k + 1 < onsets.size()) hardEnd = Math.min(hardEnd, onsets.get(k + 1) - preRoll);
+            if (k + 1 < onsets.size()) hardEnd = Math.min(hardEnd, onsets.get(k + 1) - frames(1, rate));
             if (hardEnd <= onset) continue;
 
             int lastLoud = onset / win;
             for (int b = onset / win; b * win < hardEnd; b++) {
-                if (env[b] >= off) lastLoud = b;
+                if (env[b] >= tailLevel) lastLoud = b;
             }
             int end = Math.min(hardEnd, (lastLoud + 1) * win + tail);
             float slicePeak = 0;
             for (int i = start; i < end; i++) slicePeak = Math.max(slicePeak, Math.abs(x[i]));
             out.add(new Slice(start, onset, end, slicePeak));
-            prevEnd = end;
         }
         return out;
     }
@@ -189,13 +190,17 @@ public final class Splitter {
         return role;
     }
 
-    /** Copies a slice with a short fade-out so a cut tail never clicks. */
+    /** Copies a slice with short fades at both ends so a cut never clicks. */
     public static float[] extract(float[] x, Slice s, int rate) {
         float[] d = Arrays.copyOfRange(x, s.start, s.end);
-        int fade = Math.min(d.length, frames(2, rate));
-        for (int i = 0; i < fade; i++) d[d.length - 1 - i] *= i / (float) fade;
+        // Gentle edges: a short fade-in on the (quiet) lead-in, a longer fade on the tail.
+        int in = Math.min(d.length / 4, frames(2, rate));
+        for (int i = 0; i < in; i++) d[i] *= i / (float) in;
+        int out = Math.min(d.length / 4, frames(8, rate));
+        for (int i = 0; i < out; i++) d[d.length - 1 - i] *= i / (float) out;
         return d;
     }
+
 
     private static int frames(double ms, int rate) {
         return (int) Math.round(ms * rate / 1000.0);

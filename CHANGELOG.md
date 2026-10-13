@@ -3,6 +3,20 @@
 Each `## <version>` section becomes the GitHub release notes when that version is published
 (see `.github/workflows/build.yml`). Newest first.
 
+## 0.5.1
+
+Sounds were too sharp and clipped tight (user feedback on the first real recordings):
+
+- **More room around every sound.** Import keeps 15 ms before each hit and 60 ms of ring-out
+  (down to about -56 dB) with soft fades; neighbouring sounds may overlap in the source but
+  a slice never contains the next hit. Auto Trim at load now keeps 10 ms before the onset and
+  30 ms of tail (was 0.5 ms / 2 ms).
+- **Choke off by default** so sounds layer naturally; Choke Fade default 15 ms (max 60 ms)
+  for when it's switched on. Existing configs keep their saved Choke settings: switch Left
+  Choke and Right Choke off in game.
+- **`reimport-sounds.bat`**: re-cuts all named takes with the new margins, clearing only the
+  pack folders they fill (`soundtool import-files ... --replace`).
+
 ## 0.5.0
 
 Built around the user's first real recordings:
