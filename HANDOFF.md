@@ -87,8 +87,8 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
   - `report`: pack health per slot.
   - `preview`: renders a slot through the real engine to a WAV.
   - `init`: creates a pack's folders.
-- **`build.bat` / `build.sh`:** one-command build. Needs only a JDK 17+; no Gradle and no Forge setup. It produces the `.meowtils` file, a drag-in folder and a zip.
-- **GitHub Actions** (`.github/workflows/build.yml`): builds and tests every push. When `VERSION` holds a version with no release yet, it publishes a GitHub Release with the `.meowtils` file and the drag-in zip attached.
+- **`build.bat` / `build.sh`:** one-command build. Needs only a JDK 17+; no Gradle and no Forge setup. It produces the `.meowtils` file and an install package (folder + zip) with two folders: "Drop into extensions folder" (the `.meowtils`) and "Drop into meowtils folder" (`soundgen/packs/default/…`).
+- **GitHub Actions** (`.github/workflows/build.yml`): builds and tests every push. When `VERSION` holds a version with no release yet, it publishes a GitHub Release with the `.meowtils` file and the install zip attached.
 
 ### Documentation
 
@@ -132,7 +132,7 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
 
 ### Next: first in-game run (needs the user)
 
-1. Install the drag-in from the latest release (`docs/GUIDE.md` Part 1).
+1. Install from the latest release (`docs/GUIDE.md` Part 1).
 2. Confirm SoundGen appears in Meowtils and the chat lines show up. If not, get `meowtils/meowtils.log` lines and fix.
 3. Work through GUIDE Part 3 with the Debug Readout: fast place, butterfly, legit scaffold, sprint reset, jumping and knockback. Paste the readout lines back.
 4. Choose default read methods from those results and change the defaults in `SoundGen.java`.

@@ -15,7 +15,7 @@ The build needs a JDK 17+ and nothing else; it downloads the Meowtils reference 
 
 Outputs:
 - `build/libs/SoundGen-<version>.meowtils`
-- `build/dropin/meowtils/` (the drag-in folder)
+- `build/dropin/` (install package: "Drop into extensions folder" + "Drop into meowtils folder")
 - `build/SoundGen-<version>-dropin.zip`
 
 ## Keeping GitHub up to date (do this as part of normal work)
@@ -26,7 +26,7 @@ The user wants GitHub to hold every version of the `.meowtils` file. The CI (`.g
 2. **Publish a release** when a change is worth installing (a fix confirmed in game, a new feature, a new default):
    - bump `VERSION` (patch for fixes, minor for features: 0.1.0 → 0.1.1 / 0.2.0);
    - add a matching `## <version>` section at the top of `CHANGELOG.md` (it becomes the release notes);
-   - commit and push. The workflow creates the GitHub Release `v<version>` with the `.meowtils` file and the drag-in zip.
+   - commit and push. The workflow creates the GitHub Release `v<version>` with the `.meowtils` file and the install zip.
 3. **After pushing,** check the workflow run succeeded. If it failed, fix it before moving on.
 4. **Never commit** `build/`, `libs/*.jar`, or recordings (`recordings/`, raw takes). They are git-ignored; keep it that way.
 5. **When you finish a work session,** update `HANDOFF.md`: the verification table and the roadmap.

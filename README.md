@@ -100,7 +100,12 @@ To hear the sounds yourself while they go to the cable, turn on Windows "Listen 
 
 ## Install
 
-Download `SoundGen-<version>-dropin.zip` from the GitHub **Releases** page, unzip, and drag the `meowtils` folder onto your game directory (the folder that already contains `meowtils`). See `docs/GUIDE.md`, Part 1.
+Download `SoundGen-<version>-dropin.zip` from the GitHub **Releases** page and unzip it. It has two folders, named after where their contents go:
+
+- **Drop into extensions folder** → `SoundGen-<version>.meowtils` goes in `%APPDATA%\.minecraft\meowtils\extensions`
+- **Drop into meowtils folder** → `soundgen` goes in `%APPDATA%\.minecraft\meowtils` (the sound folders; optional, they're created on first run)
+
+See `docs/GUIDE.md`, Part 1.
 
 ## Building
 
@@ -111,7 +116,7 @@ build.bat        (Windows)
 ./build.sh       (macOS/Linux)
 ```
 
-This downloads the Meowtils reference jar into `libs/` (compile-only, never shipped), compiles for Java 8, runs the self-test, and translates Minecraft names to Forge runtime names using `buildtools/mappings.txt`. Output: `build/libs/SoundGen-<version>.meowtils`, plus the drag-in folder `build/dropin/meowtils` and the zip `build/SoundGen-<version>-dropin.zip`.
+This downloads the Meowtils reference jar into `libs/` (compile-only, never shipped), compiles for Java 8, runs the self-test, and translates Minecraft names to Forge runtime names using `buildtools/mappings.txt`. Output: `build/libs/SoundGen-<version>.meowtils`, plus the install package `build/dropin/` (two folders, one per destination) and the zip `build/SoundGen-<version>-dropin.zip`.
 
 Every push to GitHub runs the same build (`.github/workflows/build.yml`). When `VERSION` contains a version that has no release yet, the workflow publishes one.
 

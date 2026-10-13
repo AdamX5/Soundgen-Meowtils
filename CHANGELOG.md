@@ -3,6 +3,15 @@
 Each `## <version>` section becomes the GitHub release notes when that version is published
 (see `.github/workflows/build.yml`). Newest first.
 
+## 0.1.1
+
+- Install package reorganised into two folders named after their destination:
+  "Drop into extensions folder" (the `.meowtils` file) and "Drop into meowtils folder"
+  (the `soundgen` sound folders). No more nesting to get right.
+- Install notes point to `%APPDATA%\.minecraft\meowtils` and warn against the
+  `lunarclient\Meowtils-Lunar` folder.
+- No code changes to the extension itself.
+
 ## 0.1.0
 
 First build. Not yet tested in game.

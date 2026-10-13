@@ -35,13 +35,18 @@ import java.util.zip.ZipOutputStream;
  *  3. compile and run the offline engine self-test
  *  4. translate Minecraft names to Forge runtime (SRG) names (Reobf + mappings.txt)
  *  5. package build/libs/SoundGen-<version>.meowtils
- *  6. assemble the drag-in folder and zip: build/dropin/ and build/SoundGen-<version>-dropin.zip
+ *  6. assemble the install package and zip: build/dropin/ and build/SoundGen-<version>-dropin.zip
+ *     It holds two folders, one per destination, so nothing has to be nested correctly:
+ *       "Drop into extensions folder/SoundGen-<version>.meowtils"  -> <game dir>/meowtils/extensions/
+ *       "Drop into meowtils folder/soundgen/packs/default/..."    -> <game dir>/meowtils/
  */
 public final class Build {
     static final String MEOWTILS_VERSION = "2.0.1";
     static final String MEOWTILS_URL =
             "https://github.com/femboytatp/meowtils/releases/download/" + MEOWTILS_VERSION + "/Meowtils-" + MEOWTILS_VERSION + ".jar";
     static final String SEP = File.pathSeparator;
+    static final String EXT_FOLDER = "Drop into extensions folder";
+    static final String DATA_FOLDER = "Drop into meowtils folder";
 
     public static void main(String[] args) throws Exception {
         boolean test = !Arrays.asList(args).contains("--no-test");
@@ -97,41 +102,50 @@ public final class Build {
         Files.createDirectories(jar.getParent());
         writeJar(jar, version, reobf, root.resolve("src/main/resources"));
 
-        // 6. drag-in folder + zip
-        step("assembling drag-in folder");
+        // 6. install package (one folder per destination) + zip
+        step("assembling install package");
         Path dropin = build.resolve("dropin");
-        Path ext = dropin.resolve("meowtils/extensions");
+        Path ext = dropin.resolve(EXT_FOLDER);
         Files.createDirectories(ext);
         Files.copy(jar, ext.resolve(jar.getFileName()));
         // Create the default pack layout with the built tool itself (also proves the jar runs).
         run(jar.toString(), "meowtils.extension.soundgen.tools.SoundTool", "init",
-                dropin.resolve("meowtils/soundgen/packs/default").toString());
+                dropin.resolve(DATA_FOLDER + "/soundgen/packs/default").toString());
         Files.write(dropin.resolve("HOW-TO-INSTALL.txt"), installText(version).getBytes(StandardCharsets.UTF_8));
         Path zip = build.resolve("SoundGen-" + version + "-dropin.zip");
         zipTree(dropin, zip);
 
         step("done");
         System.out.println("  extension : " + root.relativize(jar));
-        System.out.println("  drag-in   : " + root.relativize(dropin) + File.separator + "meowtils  (or " + root.relativize(zip) + ")");
+        System.out.println("  package   : " + root.relativize(dropin) + "  (zipped: " + root.relativize(zip) + ")");
     }
 
     static String installText(String version) {
         return String.join(System.lineSeparator(),
                 "SoundGen " + version + " - install",
                 "",
-                "1. Close Minecraft / Lunar.",
-                "2. Open your game directory: the folder that already contains a 'meowtils' folder",
-                "   (for Lunar usually %APPDATA%\\.minecraft). Paste %APPDATA%\\.minecraft into the Explorer address bar.",
-                "3. Drag the 'meowtils' folder from this package onto the game directory and choose to MERGE",
-                "   (Windows: 'Replace the files in the destination' is fine; nothing of yours is overwritten",
-                "   except an older SoundGen .meowtils with the same name).",
-                "   Result:",
-                "     <game dir>\\meowtils\\extensions\\SoundGen-" + version + ".meowtils",
-                "     <game dir>\\meowtils\\soundgen\\packs\\default\\<sound folders>",
-                "4. Delete any OLDER SoundGen-*.meowtils from meowtils\\extensions (keep only one version).",
-                "5. Start the game, open the Meowtils GUI, enable SoundGen, press Sounds > Test Sounds.",
+                "Your meowtils folder is <game dir>\\meowtils. For Lunar: %APPDATA%\\.minecraft\\meowtils",
+                "(paste that into the Explorer address bar). It contains meowtils.json and an 'extensions' folder.",
+                "Not the lunarclient\\Meowtils-Lunar folder: that one holds the Meowtils mod itself.",
                 "",
-                "Sound recordings go in meowtils\\soundgen\\packs\\default\\<slot>\\ (see README.txt there).",
+                "1. Close Minecraft / Lunar.",
+                "",
+                "2. '" + EXT_FOLDER + "'",
+                "   Drag SoundGen-" + version + ".meowtils into  meowtils\\extensions",
+                "   Delete any older SoundGen-*.meowtils there (keep only one version).",
+                "",
+                "3. '" + DATA_FOLDER + "'",
+                "   Drag the 'soundgen' folder into  meowtils  and merge if asked.",
+                "   This holds the sound folders you record into. Optional on first install:",
+                "   SoundGen creates the same folders itself the first time it is enabled.",
+                "   It never overwrites your recordings (the folders only contain a README).",
+                "",
+                "   Result:",
+                "     meowtils\\extensions\\SoundGen-" + version + ".meowtils",
+                "     meowtils\\soundgen\\packs\\default\\<sound folders>",
+                "",
+                "4. Start the game, open the Meowtils menu, enable SoundGen, press Sounds > Test Sounds.",
+                "",
                 "Full guide: docs/GUIDE.md in the GitHub repository.",
                 "");
     }

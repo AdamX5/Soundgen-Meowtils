@@ -46,26 +46,37 @@ There are three separate things you will work with:
 
 1. Open the repository's **Releases** page on GitHub: `https://github.com/AdamX5/Soundgen-Meowtils/releases`.
 2. From the newest release, download **`SoundGen-<version>-dropin.zip`**.
-3. Unzip it anywhere. Inside is one folder, `meowtils`, and `HOW-TO-INSTALL.txt`.
+3. Unzip it anywhere. Inside are two folders, named after where their contents go, plus `HOW-TO-INSTALL.txt`:
 
-### 1.2 Install (drag and merge)
+```
+SoundGen-<version>-dropin
+├── Drop into extensions folder
+│   └── SoundGen-<version>.meowtils
+├── Drop into meowtils folder
+│   └── soundgen\packs\default\…   (one empty folder per sound slot)
+└── HOW-TO-INSTALL.txt
+```
+
+### 1.2 Install
+
+Your **meowtils folder** is `%APPDATA%\.minecraft\meowtils` (paste that into the Explorer address bar). It contains `meowtils.json` and an `extensions` folder. **(checked on the user's PC)**
 
 1. Close Minecraft/Lunar.
-2. Open your **game directory**: the folder that already contains a `meowtils` folder (with `meowtils.json` inside). For Lunar this is usually `%APPDATA%\.minecraft`; paste that into the Explorer address bar. **(assumed: Lunar's default; check Lunar's settings if you changed it)**
-3. Drag the zip's `meowtils` folder **onto the game directory** and let Windows merge it. Nothing of yours is overwritten; it only adds:
-   - `meowtils\extensions\SoundGen-<version>.meowtils`
-   - `meowtils\soundgen\packs\default\` with one empty folder per sound slot
-   - Already inside your `meowtils` folder? Then drag the zip's **contents** (`extensions` and `soundgen`) in instead. Dropping the whole folder there would create `meowtils\meowtils\…`, which Meowtils ignores.
-4. Keep only **one** `SoundGen-*.meowtils` in `meowtils\extensions`; delete older versions when you update.
+2. From **"Drop into extensions folder"**: drag `SoundGen-<version>.meowtils` into `meowtils\extensions`. Delete any older `SoundGen-*.meowtils` there: keep only one version.
+3. From **"Drop into meowtils folder"**: drag the `soundgen` folder into `meowtils`, and merge if Windows asks.
+   - These are the folders you'll record into.
+   - This step is optional on a first install: SoundGen creates the same folders the first time it's enabled.
+   - It never overwrites recordings; the folders only contain a README.
+
+Result:
+
+```
+.minecraft\meowtils
+├── extensions\SoundGen-<version>.meowtils
+└── soundgen\packs\default\…
+```
 
 > **Not this folder:** `%APPDATA%\lunarclient\Meowtils-Lunar\` (contains `Meowtils.jar`, `lunar-agent.jar`, `agent-mods.json`). That is where Lunar loads the Meowtils mod itself from. SoundGen does not go there. **(checked on the user's PC)**
-
-```
-<game dir>                      ← drop the "meowtils" folder HERE (not inside meowtils)
-└── meowtils                    ← merges with your existing one
-    ├── extensions\SoundGen-0.1.0.meowtils
-    └── soundgen\packs\default\...
-```
 
 Then continue with **Part 2.2**.
 
@@ -100,8 +111,8 @@ build.bat
 ```
 
 - It downloads the Meowtils reference jar on first run, compiles, runs the self-test, translates Minecraft names for the game, and packages.
-- Output: `build\libs\SoundGen-<version>.meowtils`, the ready drag-in folder `build\dropin\meowtils`, and `build\SoundGen-<version>-dropin.zip`.
-- Install exactly as in 1.2, using `build\dropin\meowtils`.
+- Output: `build\libs\SoundGen-<version>.meowtils`, the install package `build\dropin\` (the same two folders as the release zip), and `build\SoundGen-<version>-dropin.zip`.
+- Install exactly as in 1.2, using the folders in `build\dropin\`.
 - `build.bat --no-test` skips the self-test for a faster build.
 
 You don't need to publish anything by hand: pushing to GitHub builds automatically, and bumping `VERSION` publishes a new release (see `HANDOFF.md`).
