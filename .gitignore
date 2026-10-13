@@ -1,11 +1,7 @@
-.gradle/
 build/
-run/
 libs/*.jar
+recordings/
 *.iml
 .idea/
+.vscode/
 out/
-*.classpath
-*.project
-*.settings/
-recordings/

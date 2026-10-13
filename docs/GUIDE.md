@@ -1,6 +1,6 @@
 # SoundGen step-by-step guide
 
-This guide goes from an empty PC to recording, cutting and tuning many sound variations. Part 1 covers setup; Parts 2–3 get the extension running in game; Parts 4–6 cover recording, splitting and tuning.
+This guide goes from an empty PC to recording, cutting and tuning many sound variations. Part 1 installs a ready build by drag-and-drop; Part 1b is only for working on the code; Parts 2–3 cover first launch and testing; Parts 4–6 cover recording, splitting and tuning.
 
 Confidence markers:
 - **(checked)**: confirmed by reading the Meowtils 2.0.1 jar, or by this project's tests.
@@ -28,78 +28,94 @@ Confidence markers:
                 └── README.txt
 ```
 
-The `libs/meowtils.jar` in this project is **only a reference used while compiling**, so the code knows what Meowtils' API looks like. It is never changed and never shipped.
+You never need to download or touch a Meowtils jar for the build either: the build fetches its own copy into `libs/` as a **compile reference only**. It is never changed and never shipped. **(checked)**
 
 There are three separate things you will work with:
 
 | Thing | Where it lives | Changed by |
 |---|---|---|
-| The code | this Git repo | you and me, committed to GitHub |
-| The built extension | `build/libs/SoundGen-*.meowtils` → copied into `meowtils/extensions/` | running the build |
-| The sounds | `meowtils/soundgen/packs/<pack>/` | you, via recording and the sound tool |
+| The code | the project folder on your PC ↔ GitHub | you and Claude, committed and pushed |
+| The built extension | GitHub **Releases** (automatic), or `build\libs\` after a local build | the build |
+| The sounds | `<game dir>\meowtils\soundgen\packs\<pack>\` | you, via recording and the sound tool |
 
 ---
 
-## Part 1. One-time PC setup (Windows)
+## Part 1. Get it running (no building needed)
 
-### 1.1 Install the tools
+### 1.1 Download
 
-1. **Git**: install from git-scm.com with the default options.
-2. **Java 8 JDK**: install Eclipse Temurin 8 (JDK, x64) from adoptium.net. During setup, enable **"Set JAVA_HOME variable"**.
-   - Java 8 specifically: the Forge 1.8.9 build tooling (ForgeGradle 2.1) does not run on newer Java. **(assumed, standard for 1.8.9 mods)**
-3. **Audacity** (free) for recording.
-4. Optional: **VB-Audio Cable** (free), only needed for Part 7.
+1. Open the repository's **Releases** page on GitHub: `https://github.com/AdamX5/Soundgen-Meowtils/releases`.
+2. From the newest release, download **`SoundGen-<version>-dropin.zip`**.
+3. Unzip it anywhere. Inside is one folder, `meowtils`, and `HOW-TO-INSTALL.txt`.
 
-Check Java in a **new** terminal (Command Prompt or PowerShell):
+### 1.2 Install (drag and merge)
+
+1. Close Minecraft/Lunar.
+2. Open your **game directory**: the folder that already contains a `meowtils` folder (with `meowtils.json` inside). For Lunar this is usually `%APPDATA%\.minecraft`; paste that into the Explorer address bar. **(assumed: Lunar's default; check Lunar's settings if you changed it)**
+3. Drag the zip's `meowtils` folder **onto the game directory** and let Windows merge it. Nothing of yours is overwritten; it only adds:
+   - `meowtils\extensions\SoundGen-<version>.meowtils`
+   - `meowtils\soundgen\packs\default\` with one empty folder per sound slot
+4. Keep only **one** `SoundGen-*.meowtils` in `meowtils\extensions`; delete older versions when you update.
 
 ```
-java -version
+<game dir>                      ← drop the "meowtils" folder HERE (not inside meowtils)
+└── meowtils                    ← merges with your existing one
+    ├── extensions\SoundGen-0.1.0.meowtils
+    └── soundgen\packs\default\...
 ```
 
-It should say `1.8.0_…`. If it shows 17 or 21, see Troubleshooting at the end.
+Then continue with **Part 2.2**.
 
-### 1.2 Get the code
+---
+
+## Part 1b. Building yourself (only for working on the code)
+
+### Tools
+
+1. **Git** from git-scm.com, default options.
+2. **JDK 21** (Eclipse Temurin 21 from adoptium.net, choose *JDK*, enable "Set JAVA_HOME" and "Add to PATH"). Any JDK 17+ works; the build still targets Java 8 so it runs on Forge and Lunar. **(checked)**
+3. **Audacity** for recording, and optionally **VB-Audio Cable** (Part 7).
+
+Check in a new terminal: `java -version` shows 17 or newer.
+
+### Project folder
+
+Put the project in a normal folder, **not** inside the game directory, for example:
 
 ```
 cd %USERPROFILE%\Documents
+mkdir Projects
+cd Projects
 git clone https://github.com/AdamX5/Soundgen-Meowtils.git
 cd Soundgen-Meowtils
-git checkout claude/optimistic-tesla-mxjg6x
 ```
 
-### 1.3 Give the build the Meowtils reference jar
-
-1. Download the Meowtils jar that matches the version you play with (currently 2.0.1) from github.com/femboytatp/meowtils/releases.
-2. Copy it into this project's `libs` folder and rename it to exactly `meowtils.jar`.
-
-Your `libs` folder should now contain `meowtils.jar` and `.gitkeep`. Git ignores the jar on purpose: never commit it.
-
-### 1.4 Build
+### Build
 
 ```
-gradlew.bat build
+build.bat
 ```
 
-- The first build downloads Gradle, Forge and Minecraft 1.8.9 mappings. Expect several minutes. Later builds are much faster.
-- Success ends with `BUILD SUCCESSFUL`, and the output is `build\libs\SoundGen-0.1.0.meowtils`.
-- If it fails, copy the **first** error block and send it to me. The build setup is copied from a working Meowtils extension, but this project has never been built on a real PC yet. **(assumed)**
+- It downloads the Meowtils reference jar on first run, compiles, runs the self-test, translates Minecraft names for the game, and packages.
+- Output: `build\libs\SoundGen-<version>.meowtils`, the ready drag-in folder `build\dropin\meowtils`, and `build\SoundGen-<version>-dropin.zip`.
+- Install exactly as in 1.2, using `build\dropin\meowtils`.
+- `build.bat --no-test` skips the self-test for a faster build.
+
+You don't need to publish anything by hand: pushing to GitHub builds automatically, and bumping `VERSION` publishes a new release (see `HANDOFF.md`).
 
 ---
 
-## Part 2. Install and first launch
+## Part 2. First launch
 
-### 2.1 Find your game directory
+### 2.1 Install
 
-1. Search your PC for the file `meowtils.json`. The folder containing it is `<game dir>\meowtils\`.
-2. For Lunar this is usually `%APPDATA%\.minecraft\meowtils\`, unless you changed Lunar's game directory in its settings. **(assumed)**
+See Part 1.2 (release download) or Part 1b (own build).
 
-### 2.2 Install
+### 2.2 Start
 
-1. Create `<game dir>\meowtils\extensions\` if it doesn't exist.
-2. Copy `build\libs\SoundGen-0.1.0.meowtils` into it.
-3. Start Lunar and join a world or server.
+Start Lunar and join a world or server.
 
-**After every rebuild:** close the game, replace the file, then start again. Meowtils has an "extensions reloaded" feature **(checked)**, but SoundGen keeps an audio thread and the audio device open. A full restart guarantees the old copy has let go of the device.
+**After every update:** close the game, replace the file (delete the old version), then start again. Meowtils has an "extensions reloaded" feature **(checked)**, but SoundGen keeps an audio thread and the audio device open. A full restart guarantees the old copy has let go of the device.
 
 ### 2.3 First run checklist
 
@@ -207,7 +223,7 @@ Record **long takes with many hits**, not one file per click; the sound tool cut
 
 ## Part 5. Turning takes into variations (`soundtool`)
 
-`soundtool` is a small command-line program built into the same `.meowtils` file. Run it from the project folder **after building**:
+`soundtool` is a small command-line program built into the same `.meowtils` file. Run it from the project folder **after building** (Part 1b):
 
 ```
 soundtool.bat <command> …
@@ -352,8 +368,9 @@ Git:
 
 | Problem | Fix |
 |---|---|
-| `java -version` shows 17/21 | Set `JAVA_HOME` to the Temurin 8 folder (System Properties → Environment Variables), then open a new terminal. |
-| Build: `Could not resolve ForgeGradle` | Network or Forge maven problem. Retry, and send me the error if it persists. |
+| `java -version` fails or shows 1.8 | Install a JDK 17+ (Part 1b) and open a new terminal. |
+| Build: `no Java compiler found` | You have a JRE, not a JDK. Install the JDK. |
+| Build: `Reobf: no SRG mapping for …` | New code uses a Minecraft member that isn't in `buildtools/mappings.txt` yet; add it (instructions in that file). |
 | SoundGen doesn't appear in Meowtils | Check the file is in `meowtils\extensions\` and ends in `.meowtils`, then look in `meowtils\meowtils.log` for "Failed to load extension" and send me the lines. |
 | `audio failed to open` | The device name in **Output Device** is wrong, or the device is in exclusive use. Clear the field to use the default, then Apply Output. |
 | `no device matching '…'` | Press **List Devices** and type a part of a name exactly as listed. |

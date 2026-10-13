@@ -98,11 +98,22 @@ To hear the sounds yourself while they go to the cable, turn on Windows "Listen 
 - **Latency:** set by the **Buffer** slider (default 20 ms). Lower it until you hear crackles, then raise it a little. The real figure depends on your Windows audio driver.
 - **Disabled:** the audio thread is stopped and the device is closed.
 
+## Install
+
+Download `SoundGen-<version>-dropin.zip` from the GitHub **Releases** page, unzip, and drag the `meowtils` folder onto your game directory (the folder that already contains `meowtils`). See `docs/GUIDE.md`, Part 1.
+
 ## Building
 
-1. Download the Meowtils jar from [the releases page](https://github.com/femboytatp/meowtils/releases) and save it as `libs/meowtils.jar`.
-2. Run `./gradlew build`. This needs Java 8 (ForgeGradle 2.1).
-3. Copy `build/libs/SoundGen-<version>.meowtils` into `<game dir>/meowtils/extensions/`. You don't modify Meowtils itself; `libs/meowtils.jar` is only for compiling.
+Needs only a JDK 17+:
+
+```
+build.bat        (Windows)
+./build.sh       (macOS/Linux)
+```
+
+This downloads the Meowtils reference jar into `libs/` (compile-only, never shipped), compiles for Java 8, runs the self-test, and translates Minecraft names to Forge runtime names using `buildtools/mappings.txt`. Output: `build/libs/SoundGen-<version>.meowtils`, plus the drag-in folder `build/dropin/meowtils` and the zip `build/SoundGen-<version>-dropin.zip`.
+
+Every push to GitHub runs the same build (`.github/workflows/build.yml`). When `VERSION` contains a version that has no release yet, the workflow publishes one.
 
 The engine self-test needs no Minecraft:
 

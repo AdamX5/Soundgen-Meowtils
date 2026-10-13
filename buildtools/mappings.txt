@@ -1,0 +1,50 @@
+# MCP (readable) name -> SRG (Forge runtime) name for every Minecraft member SoundGen uses.
+#
+# Compiled extensions must reference SRG names: Forge runs with them, and Meowtils' extension
+# loader on Lunar translates SRG back to its own names (MappingClassLoader + mappings/*.csv).
+# This is the same rename ForgeGradle's "reobf" step does, limited to what we use.
+#
+# Source of each entry:
+#   [meowtils] Meowtils 2.0.1's own compiled code references this exact SRG name (strongest).
+#   [csv]      single candidate in Meowtils' bundled mappings/*.csv for that owner.
+#   [enum]     enum constants keep their names in SRG.
+#
+# Adding a member: find its SRG name in libs/meowtils.jar -> meowtils/mappings/fields.csv or
+# methods.csv (columns: searge,name,side,...). If several rows share the name, pick the one
+# whose owner matches: check how Meowtils' own classes reference it (javap -c on a Meowtils
+# class that uses it) or an MCP 1.8.9 stable_22 mapping viewer. Then add the stub member in
+# buildtools/stubs with the identical signature.
+#
+# kind owner                                                         mcp              srg
+F net/minecraft/client/Minecraft                                     thePlayer        field_71439_g   [meowtils]
+F net/minecraft/client/Minecraft                                     theWorld         field_71441_e   [meowtils]
+F net/minecraft/client/Minecraft                                     gameSettings     field_71474_y   [meowtils]
+F net/minecraft/client/Minecraft                                     inGameHasFocus   field_71415_G   [meowtils]
+M net/minecraft/client/Minecraft                                     getMinecraft     func_71410_x    [meowtils]
+F net/minecraft/client/entity/EntityPlayerSP                         movementInput    field_71158_b   [csv]
+F net/minecraft/util/MovementInput                                   moveStrafe       field_78902_a   [csv]
+F net/minecraft/util/MovementInput                                   moveForward      field_78900_b   [csv]
+F net/minecraft/util/MovementInput                                   jump             field_78901_c   [csv]
+F net/minecraft/util/MovementInput                                   sneak            field_78899_d   [csv]
+F net/minecraft/entity/Entity                                        onGround         field_70122_E   [meowtils]
+F net/minecraft/entity/Entity                                        motionY          field_70181_x   [csv]
+M net/minecraft/entity/Entity                                        isSneaking       func_70093_af   [meowtils]
+M net/minecraft/entity/Entity                                        isSprinting      func_70051_ag   [meowtils]
+F net/minecraft/entity/EntityLivingBase                              hurtTime         field_70737_aN  [meowtils]
+F net/minecraft/entity/EntityLivingBase                              maxHurtTime      field_70738_aO  [csv]
+F net/minecraft/client/settings/GameSettings                         keyBindForward   field_74351_w   [meowtils]
+F net/minecraft/client/settings/GameSettings                         keyBindLeft      field_74370_x   [meowtils]
+F net/minecraft/client/settings/GameSettings                         keyBindBack      field_74368_y   [meowtils]
+F net/minecraft/client/settings/GameSettings                         keyBindRight     field_74366_z   [meowtils]
+F net/minecraft/client/settings/GameSettings                         keyBindJump      field_74314_A   [meowtils]
+F net/minecraft/client/settings/GameSettings                         keyBindSneak     field_74311_E   [csv]
+F net/minecraft/client/settings/GameSettings                         keyBindSprint    field_151444_V  [meowtils]
+F net/minecraft/client/settings/GameSettings                         keyBindAttack    field_74312_F   [meowtils]
+F net/minecraft/client/settings/GameSettings                         keyBindUseItem   field_74313_G   [meowtils]
+M net/minecraft/client/settings/KeyBinding                           isKeyDown        func_151470_d   [meowtils]
+M net/minecraft/client/settings/KeyBinding                           getKeyCode       func_151463_i   [meowtils]
+M net/minecraft/network/play/client/C0BPacketEntityAction            getAction        func_180764_b   [csv]
+F net/minecraft/network/play/client/C0BPacketEntityAction$Action     START_SNEAKING   START_SNEAKING  [enum]
+F net/minecraft/network/play/client/C0BPacketEntityAction$Action     STOP_SNEAKING    STOP_SNEAKING   [enum]
+F net/minecraft/network/play/client/C0BPacketEntityAction$Action     START_SPRINTING  START_SPRINTING [enum]
+F net/minecraft/network/play/client/C0BPacketEntityAction$Action     STOP_SPRINTING   STOP_SPRINTING  [enum]
