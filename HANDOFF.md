@@ -108,7 +108,7 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
 | Engine timing, loops, voice limit, WAV formats, trim, splitter, pairing, shuffle | **Verified** (self-test, 29 checks) |
 | SRG name translation of the built file | **Verified** (round-trip through Meowtils' own table) |
 | The extension loads and runs inside Lunar | **Open**: never run in game yet |
-| Lunar's game directory is `%APPDATA%\.minecraft` | **Inferred** (Lunar's default) |
+| Lunar's game directory is `%APPDATA%\.minecraft` | **Verified** on the user's PC: `C:\Users\Adam\AppData\Roaming\.minecraft\meowtils\` holds meowtils.json, meowtils.log, extensions\ |
 | User runs Meowtils 2.0.1 on Lunar via `%APPDATA%\lunarclient\Meowtils-Lunar\` (Meowtils.jar + lunar-agent.jar) | **Verified** (user screenshot; jar size matches 2.0.1). That folder is the mod loader, not where extensions go |
 | Meowtils' hooks behave the same on Lunar as on Forge | **Inferred** (Meowtils advertises Lunar support) |
 | Audio latency on the user's Windows drivers | **Open** |

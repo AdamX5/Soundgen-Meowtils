@@ -55,6 +55,7 @@ There are three separate things you will work with:
 3. Drag the zip's `meowtils` folder **onto the game directory** and let Windows merge it. Nothing of yours is overwritten; it only adds:
    - `meowtils\extensions\SoundGen-<version>.meowtils`
    - `meowtils\soundgen\packs\default\` with one empty folder per sound slot
+   - Already inside your `meowtils` folder? Then drag the zip's **contents** (`extensions` and `soundgen`) in instead. Dropping the whole folder there would create `meowtils\meowtils\…`, which Meowtils ignores.
 4. Keep only **one** `SoundGen-*.meowtils` in `meowtils\extensions`; delete older versions when you update.
 
 > **Not this folder:** `%APPDATA%\lunarclient\Meowtils-Lunar\` (contains `Meowtils.jar`, `lunar-agent.jar`, `agent-mods.json`). That is where Lunar loads the Meowtils mod itself from. SoundGen does not go there. **(checked on the user's PC)**
