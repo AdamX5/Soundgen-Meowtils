@@ -43,6 +43,7 @@ public final class EngineSelfTest {
         otherKeysSkipHandledAndPairRelease();
         keySizesUseTheirOwnSlots();
         fallbackFollowsTheChain();
+        importSortsTakesIntoThePack();
         cpuCost();
         System.out.println(failures == 0 ? "ALL PASSED" : failures + " FAILED");
         if (failures > 0) System.exit(1);
@@ -354,6 +355,43 @@ public final class EngineSelfTest {
         check("tab_down -> other_down -> key_down uses the key_down recording",
                 !r.sets[Sound.TAB_DOWN.ordinal()].placeholder && !r.sets[Sound.OTHER_DOWN.ordinal()].placeholder
                         && r.sets[Sound.TAB_UP.ordinal()].placeholder);
+    }
+
+    private static void importSortsTakesIntoThePack() throws IOException {
+        File root = Files.createTempDirectory("sgimport").toFile();
+        File takes = new File(root, "recordings/close"), pack = new File(root, "packs/close");
+        new File(takes, "butterfly").mkdirs();
+        new File(takes, "key").mkdirs();
+        new File(takes, "drag_loop").mkdirs();
+        new File(takes, "nonsense").mkdirs();
+        float[] clicks = new float[48000 * 2];
+        for (int k = 0; k < 8; k++) {
+            int t = 2400 + k * 9600;
+            for (int i = 0; i < 800; i++) clicks[t + i] = (float) (0.5 * Math.exp(-i / 90.0) * Math.sin(i * 0.9));
+        }
+        writeWav(new File(takes, "butterfly/take1.wav"), clicks, 48000, 1, 1, 16, false);
+        float[] keys = new float[48000 * 4];
+        for (int k = 0; k < 4; k++) {
+            int t = 4800 + k * 38400;
+            for (int i = 0; i < 800; i++) keys[t + i] = (float) (0.5 * Math.exp(-i / 90.0) * Math.sin(i * 0.9));
+            for (int i = 0; i < 800; i++) keys[t + 9600 + i] = (float) (0.2 * Math.exp(-i / 90.0) * Math.sin(i * 1.1));
+        }
+        writeWav(new File(takes, "key/take1.wav"), keys, 48000, 1, 1, 16, false);
+        float[] rattle = new float[48000 * 3];
+        java.util.Arrays.fill(rattle, 0.1f);
+        writeWav(new File(takes, "drag_loop/run1.wav"), rattle, 48000, 1, 1, 16, false);
+        writeWav(new File(takes, "nonsense/x.wav"), rattle, 48000, 1, 1, 16, false);
+
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"import", takes.getPath(), pack.getPath()});
+        boolean ok = new File(pack, "butterfly/butterfly_008.wav").isFile() && !new File(pack, "butterfly/butterfly_009.wav").exists()
+                && new File(pack, "key_down/key_down_004.wav").isFile() && new File(pack, "key_up/key_up_004.wav").isFile()
+                && new File(pack, "drag_loop/drag_loop_001.wav").isFile();
+        check("import: butterfly split, key pairs split into down/up, loop copied", ok);
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"import", takes.getPath(), pack.getPath()});
+        check("import: running again adds nothing", !new File(pack, "butterfly/butterfly_009.wav").exists()
+                && !new File(pack, "drag_loop/drag_loop_002.wav").exists());
+        WavDecoder.Decoded loop = WavDecoder.decode(new File(pack, "drag_loop/drag_loop_001.wav"));
+        check("import: loop edges trimmed (2.6 s of 3 s)", Math.abs(loop.mono.length - 48000 * 2.6) < 10);
     }
 
     private static void cpuCost() {

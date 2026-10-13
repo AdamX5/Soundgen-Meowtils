@@ -208,13 +208,33 @@ Fn can't have a sound: the keyboard handles it internally and never reports it t
 3. **Set the gain.** The loudest hit should peak around **−12 to −6 dB** on Audacity's meter. Never let it reach 0: clipped hits sound harsh, and the tool flags them.
 4. **Keep the room quiet.** Fans low, no music, phone away. The splitter needs about 10 dB between a click and the background.
 
-### 4.3 Audacity settings
+### 4.3 Recording settings
 
-- Recording device: **Maono G1 Neo**
-- Recording channels: **1 (Mono)**
-- Project Rate (bottom left): **48000 Hz**
-- Edit → Preferences → Quality → Default Sample Format: **32-bit float**
-- Export: File → Export → Export as WAV, encoding **32-bit float** or **24-bit PCM**
+**Use Audacity (recommended).** It writes the exact format SoundGen wants (WAV, mono, 48 kHz) and shows the waveform, so you can see every click as you record.
+
+| Where in Audacity | Setting |
+|---|---|
+| Audio Setup → Host | **Windows WASAPI** |
+| Audio Setup → Recording Device | **Maono G1 Neo** |
+| Audio Setup → Recording Channels | **1 (Mono)** |
+| Project Rate (bottom-left corner) | **48000 Hz** |
+| Edit → Preferences → Quality → Default Sample Format | **32-bit float** |
+| Edit → Preferences → Recording → Sound Activated Recording | **off** (it cuts quiet releases) |
+| Effects (noise reduction, compressor, normalise) | **none**: SoundGen trims and levels the takes itself |
+
+Workflow: press Record, do one take (about 30 s), press Stop, then **File → Export Audio → WAV**, encoding **24-bit PCM** (or 32-bit float). Save it straight into the right recordings folder (Part 5.0), e.g. `recordings\close\butterfly\take1.wav`. Press **Ctrl+N** for a fresh project before the next take.
+
+**OBS works too, but needs one extra step.** OBS only records video files (MKV/MP4), and SoundGen reads WAV only.
+- Settings → Audio: Sample Rate **48 kHz**, Channels **Mono**.
+- Settings → Output: Output Mode **Advanced** → Recording: Recording Format **MKV** → Audio Encoder **FFmpeg PCM (24-bit)** (lossless).
+- **Turn off every filter** on the mic source: noise suppression, noise gate, compressor. **(assumed:** these option names are from recent OBS versions and may differ slightly in yours)
+- Then open each MKV in Audacity and export it as WAV, which is the same thing Audacity gives you directly.
+
+**Two mic distances = two packs.**
+- **close**: mic 10–20 cm from the keyboard and mouse. Gain so the loudest click peaks around −12 dB.
+- **far**: mic where it normally sits when you talk, with your **normal talking gain**. Don't raise it: the clicks should sound as distant as they really would behind your voice.
+
+Record both sets the same way, into `recordings\close\…` and `recordings\far\…`.
 
 ### 4.4 How to record each slot
 
@@ -253,7 +273,34 @@ Record **long takes with many hits**, not one file per click; the sound tool cut
 
 ---
 
-## Part 5. Turning takes into variations (`soundtool`)
+## Part 5. Turning takes into variations
+
+### 5.0 The easy way: double-click
+
+After installing (Part 1), your meowtils folder has:
+
+```
+%APPDATA%\.minecraft\meowtils\soundgen\
+├── import-sounds.bat        ← double-click this
+├── recordings\
+│   ├── close\  butterfly\  right_click\  drag_loop\  drag_end\  key\  space\  shift\  tab\  backspace\
+│   └── far\    (the same folders)
+└── packs\
+    ├── close\   ← filled by import-sounds.bat
+    └── far\
+```
+
+1. Save each take (a long recording with many clicks or presses) into the matching folder, e.g. `recordings\close\butterfly\take1.wav`. Names don't matter; any number of takes per folder.
+   - `key`, `space`, `shift`, `tab`, `backspace` takes: press, hold ~0.2 s, release, **pause 0.6 s**. They are split into `<name>_down` and `<name>_up` automatically.
+   - `drag_loop`: one continuous run per file. It isn't cut up; only the first and last 0.2 s (finger landing and lifting) are removed.
+2. Double-click **`import-sounds.bat`**. It cuts every **new** take into the pack folders and prints a report per pack (what's still thin, anything clipped). Takes it has already done are remembered (`imported.txt`), so add more takes any time and run it again.
+3. In game: **Sounds → Sound Pack** = `close` (or `far`) → **Reload Sounds**.
+
+It needs Java installed once (Eclipse Temurin 21 from adoptium.net, tick "Add to PATH"); the bat tells you if it's missing.
+
+To undo a bad import, delete the new files from the pack folder and remove the take's line from `recordings\<pack>\imported.txt`.
+
+The rest of this part covers the same tool from the command line, for finer control.
 
 `soundtool` is a small command-line program built into the same `.meowtils` file. Run it from the project folder **after building** (Part 1b):
 

@@ -52,6 +52,9 @@ public final class SoundTool {
                 case "preview":
                     preview(rest);
                     break;
+                case "import":
+                    importTakes(rest);
+                    break;
                 default:
                     usage();
                     System.exit(2);
@@ -85,6 +88,14 @@ public final class SoundTool {
                 "      --gap <ms>            minimum spacing between hits (default 40)",
                 "      --max <ms>            longest hit kept (default 400)",
                 "      --dry-run             only list what would be cut",
+                "",
+                "  import <recordings folder> <pack> [--dry-run]",
+                "      The easy way: one sub-folder per sound, named like the pack folders:",
+                "        butterfly, right_click, drag, drag_end, drag_loop   (one-shot clicks / loop takes)",
+                "        key, space, shift, tab, backspace, other, w, ...      (press+release takes: split",
+                "                                                              into <name>_down and <name>_up)",
+                "      Every new take is cut into the right pack folders. Takes already imported",
+                "      are remembered (imported.txt) and skipped, so just add takes and run it again.",
                 "",
                 "  report <pack>",
                 "      Per slot: variation count, levels, lengths, and problems to fix.",
@@ -158,6 +169,16 @@ public final class SoundTool {
             takes.add(input);
         }
         if (takes.isEmpty()) throw new IllegalArgumentException("no .wav takes found at " + input);
+        splitTakes(takes, out, prefix, alternate, altPrefix, o, pairWindowMs, dryRun);
+    }
+
+    /**
+     * Cuts each take into hits and writes them as numbered files after the existing ones.
+     * With {@code alternate}, hits are paired press/release by timing and the second of each
+     * pair goes there; unpaired hits are skipped. Returns the number of files written.
+     */
+    static int splitTakes(List<File> takes, File out, String prefix, File alternate, String altPrefix,
+                          Splitter.Options o, double pairWindowMs, boolean dryRun) throws IOException {
         if (!dryRun) {
             mkdirs(out);
             if (alternate != null) mkdirs(alternate);
@@ -206,7 +227,8 @@ public final class SoundTool {
                 }
             }
         }
-        System.out.println(dryRun ? "dry run: nothing written" : written + " files written");
+        System.out.println(dryRun ? "dry run: nothing written" : written + " files written to " + out.getName()
+                + (alternate != null ? " / " + alternate.getName() : ""));
         if (clipped > 0) {
             System.out.println(clipped + " hits clipped: lower the mic gain and re-record those, they will sound harsh");
         }
@@ -214,6 +236,7 @@ public final class SoundTool {
             System.out.println(unpaired + " hits had no partner and were skipped (a missed quiet release, a double press, "
                     + "or pauses shorter than --pair-window). Lower --threshold if releases are being missed.");
         }
+        return written;
     }
 
     private static int nextNumber(File dir, String prefix) {
@@ -227,6 +250,104 @@ public final class SoundTool {
             }
         }
         return max + 1;
+    }
+
+    // ------------------------------------------------------------------ import
+
+    private static final String IMPORTED_LIST = "imported.txt";
+
+    private static void importTakes(String[] args) throws IOException {
+        boolean dryRun = false;
+        List<String> positional = new ArrayList<String>();
+        for (String a : args) {
+            if (a.equals("--dry-run")) {
+                dryRun = true;
+            } else if (a.startsWith("--")) {
+                throw new IllegalArgumentException("unknown option " + a);
+            } else {
+                positional.add(a);
+            }
+        }
+        if (positional.size() != 2) throw new IllegalArgumentException("import needs <recordings folder> <pack>");
+        File takesRoot = new File(positional.get(0));
+        File pack = new File(positional.get(1));
+        if (!takesRoot.isDirectory()) throw new IOException("no such recordings folder: " + takesRoot);
+        if (!dryRun) SampleBank.ensureLayout(pack, new ArrayList<String>());
+
+        File list = new File(takesRoot, IMPORTED_LIST);
+        java.util.Set<String> done = new java.util.HashSet<String>();
+        if (list.isFile()) done.addAll(java.nio.file.Files.readAllLines(list.toPath(), java.nio.charset.StandardCharsets.UTF_8));
+
+        File[] dirs = takesRoot.listFiles(File::isDirectory);
+        if (dirs == null || dirs.length == 0) {
+            throw new IllegalArgumentException("no sub-folders in " + takesRoot + " (make one per sound, e.g. butterfly, key, space)");
+        }
+        Arrays.sort(dirs);
+        int total = 0;
+        List<String> newlyDone = new ArrayList<String>();
+        for (File dir : dirs) {
+            String name = dir.getName().toLowerCase(Locale.ROOT);
+            List<File> takes = new ArrayList<File>();
+            File[] wavs = dir.listFiles((d, n) -> n.toLowerCase().endsWith(".wav"));
+            if (wavs != null) {
+                Arrays.sort(wavs);
+                for (File w : wavs) if (!done.contains(name + "/" + w.getName())) takes.add(w);
+            }
+            if (takes.isEmpty()) continue;
+
+            Sound one = slot(name);
+            Sound down = slot(name + "_down");
+            Sound up = slot(name + "_up");
+            System.out.println("== " + name + ": " + takes.size() + " new take(s)");
+            if (one != null && one.loop) {
+                total += importLoops(takes, new File(pack, one.folder), dryRun);
+            } else if (one != null) {
+                Splitter.Options o = new Splitter.Options();
+                if (one == Sound.BUTTERFLY || one == Sound.DRAG) o.minGapMs = 25; // fast clicking takes
+                if (one == Sound.DRAG_END) o.maxLengthMs = 300;
+                total += splitTakes(takes, new File(pack, one.folder), one.folder, null, null, o, 400, dryRun);
+            } else if (down != null && up != null) {
+                Splitter.Options o = new Splitter.Options();
+                o.thresholdDb = 40; // releases are quiet: don't miss them
+                total += splitTakes(takes, new File(pack, down.folder), down.folder, new File(pack, up.folder), up.folder,
+                        o, 400, dryRun);
+            } else {
+                System.out.println("   skipped: no sound slot called '" + name + "' (see 'soundtool' for the folder names)");
+                continue;
+            }
+            for (File t : takes) newlyDone.add(name + "/" + t.getName());
+        }
+        if (!dryRun && !newlyDone.isEmpty()) {
+            java.nio.file.Files.write(list.toPath(), newlyDone, java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        }
+        System.out.println(dryRun ? "dry run: nothing written" : total + " files added to " + pack.getAbsolutePath());
+        if (newlyDone.isEmpty()) System.out.println("nothing new to import (delete " + IMPORTED_LIST + " to re-import everything)");
+    }
+
+    /** Loop takes aren't split: the first and last 0.2 s (finger landing / lifting) are cut off. */
+    private static int importLoops(List<File> takes, File out, boolean dryRun) throws IOException {
+        int next = nextNumber(out, out.getName());
+        int written = 0;
+        for (File take : takes) {
+            WavDecoder.Decoded d = WavDecoder.decode(take);
+            int edge = d.rate / 5;
+            float[] body = d.mono.length > edge * 2 + d.rate ? Arrays.copyOfRange(d.mono, edge, d.mono.length - edge) : d.mono;
+            String file = String.format("%s_%03d.wav", out.getName(), next++);
+            System.out.printf("  %-24s %.1f s (from %s)%n", file, body.length / (double) d.rate, take.getName());
+            if (body.length < d.rate * 3 / 2) System.out.println("    note: under 1.5 s, repeats will be noticeable");
+            if (!dryRun) {
+                mkdirs(out);
+                WavWriter.write24(new File(out, file), body, d.rate);
+                written++;
+            }
+        }
+        return written;
+    }
+
+    private static Sound slot(String folder) {
+        for (Sound s : Sound.values()) if (s.folder.equals(folder)) return s;
+        return null;
     }
 
     // ------------------------------------------------------------------ report

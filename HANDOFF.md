@@ -166,7 +166,8 @@ Ask the user for a Debug Readout line while butterfly clicking at full speed.
 ### Next
 
 1. Install 0.3.0 (`build.bat --install`, or the release zip) and re-test the inventory and key-size points above.
-2. **Recording pack v1 has started** (user's call): GUIDE Part 4, "What to record first".
+2. **Recording pack v1 has started** (user's call): GUIDE Part 4. The user records **two packs**, `close` (mic near the keyboard) and `far` (mic in its talking position, sounds in the background). They use `import-sounds.bat` (0.4.0) to cut the takes. Advised to record in Audacity (WAV, mono, 48 kHz) rather than OBS.
+   - **Planned feature:** a quick way to switch close/far in game (a dropdown or hotkey instead of typing the Sound Pack name), and possibly blending the two.
 3. Work through GUIDE Part 3 with the Debug Readout (fast place, butterfly, legit scaffold, sprint reset, jumping, knockback). Pick default read methods from the results and set them in `SoundGen.java`.
 
 ### Then

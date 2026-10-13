@@ -3,6 +3,20 @@
 Each `## <version>` section becomes the GitHub release notes when that version is published
 (see `.github/workflows/build.yml`). Newest first.
 
+## 0.4.0
+
+Recording workflow (no command line needed):
+
+- `soundgen\import-sounds.bat` (in the install package): double-click to cut every new take in
+  `soundgen\recordings\<pack>\<sound>\` into `soundgen\packs\<pack>\`, then print a report.
+  Press/release takes (`key`, `space`, `shift`, `tab`, `backspace`, ...) are split into
+  `<name>_down` / `<name>_up`; `drag_loop` runs are kept whole with 0.2 s trimmed off each end.
+  Already-imported takes are remembered, so it can be run again after every session.
+- Ready-made `recordings\close` and `recordings\far` folders and matching packs, for the two
+  mic distances (switch with Sound Pack).
+- `soundtool import <recordings> <pack>` for the same thing from the command line.
+- Guide: Audacity settings (recommended), OBS settings, two-distance recording.
+
 ## 0.3.0
 
 From the second in-game test (0.2.0):
