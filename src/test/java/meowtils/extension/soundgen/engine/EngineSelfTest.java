@@ -16,7 +16,7 @@ import java.util.List;
  * Offline checks for the engine: renders blocks without an audio device against a fake
  * clock, so timing can be asserted to the frame. Plain main() so it needs no test framework:
  *
- *   javac -d out $(find src/main/java/meowtils/extension/soundgen/engine src/main/java/meowtils/extension/soundgen/input src/test/java -name '*.java')
+ *   javac -d out $(find src/main/java/meowtils/extension/soundgen/engine src/main/java/meowtils/extension/soundgen/input src/main/java/meowtils/extension/soundgen/tools src/test/java -name '*.java')
  *   java -cp out meowtils.extension.soundgen.engine.EngineSelfTest
  */
 public final class EngineSelfTest {
@@ -33,6 +33,11 @@ public final class EngineSelfTest {
         spreadDistributesClicksAcrossTick();
         keyReleaseRespectsMinHold();
         placeholdersCoverEverySlot();
+        shuffleBagPlaysEveryVariationBeforeRepeating();
+        matchLevelsEvensPeaks();
+        splitterFindsEveryHit();
+        splitterSeparatesFastButterflyTake();
+        toolSplitsReportsAndPreviews();
         cpuCost();
         System.out.println(failures == 0 ? "ALL PASSED" : failures + " FAILED");
         if (failures > 0) System.exit(1);
@@ -143,17 +148,110 @@ public final class EngineSelfTest {
 
     private static void placeholdersCoverEverySlot() throws IOException {
         File dir = Files.createTempDirectory("sgbank").toFile();
-        SampleBank.Result r = SampleBank.load(dir, true);
+        SampleBank.Result r = SampleBank.load(dir, true, true);
         boolean all = true;
         for (SampleSet s : r.sets) all &= s != null && s.size() > 0;
         check("every slot has sound with no recordings", all && r.recorded == 0 && r.warnings.isEmpty());
         check("folders and README created", new File(dir, "drag_loop").isDirectory() && new File(dir, "README.txt").isFile());
     }
 
+    private static void shuffleBagPlaysEveryVariationBeforeRepeating() {
+        Sample[] samples = new Sample[7];
+        for (int i = 0; i < samples.length; i++) samples[i] = new Sample(new float[]{i}, "v" + i);
+        SampleSet set = new SampleSet(samples, false);
+        Rng rng = new Rng(42);
+        boolean ok = true;
+        Sample prev = null;
+        for (int bag = 0; bag < 50 && ok; bag++) {
+            java.util.Set<Sample> seen = new java.util.HashSet<Sample>();
+            for (int k = 0; k < samples.length; k++) {
+                Sample s = set.pick(rng, SampleSet.SHUFFLE);
+                ok &= seen.add(s) && s != prev;
+                prev = s;
+            }
+        }
+        check("shuffle: all 7 variations per round, never back-to-back", ok);
+        int repeats = 0;
+        prev = null;
+        for (int k = 0; k < 2000; k++) {
+            Sample s = set.pick(rng, SampleSet.RANDOM);
+            if (s == prev) repeats++;
+            prev = s;
+        }
+        check("random: never back-to-back", repeats == 0);
+    }
+
+    private static void matchLevelsEvensPeaks() {
+        Sample[] s = {new Sample(new float[]{0.2f}, "a"), new Sample(new float[]{0.4f}, "b"), new Sample(new float[]{0.8f}, "c"),
+                new Sample(new float[]{0.01f}, "too quiet")};
+        SampleBank.matchLevels(s);
+        check("levels matched to median, boost capped at 12 dB",
+                Math.abs(s[0].data[0] - 0.4f) < 1e-6 && Math.abs(s[2].data[0] - 0.4f) < 1e-6 && Math.abs(s[3].data[0] - 0.04f) < 1e-6);
+    }
+
+    private static void splitterFindsEveryHit() {
+        int rate = 44100;
+        float[] take = new float[rate * 4];
+        java.util.Random r = new java.util.Random(3);
+        for (int i = 0; i < take.length; i++) take[i] = (float) (r.nextGaussian() * 0.002); // room noise
+        int[] at = new int[12];
+        for (int k = 0; k < at.length; k++) {
+            at[k] = (int) (rate * (0.2 + k * 0.3 + r.nextDouble() * 0.05));
+            double amp = 0.3 + 0.5 * r.nextDouble();
+            for (int i = 0; i < rate / 50; i++) take[at[k] + i] += (float) (amp * Math.exp(-i / (rate * 0.003)) * Math.sin(i * 0.9));
+        }
+        java.util.List<meowtils.extension.soundgen.tools.Splitter.Slice> found =
+                meowtils.extension.soundgen.tools.Splitter.find(take, rate, new meowtils.extension.soundgen.tools.Splitter.Options());
+        boolean ok = found.size() == at.length;
+        for (int k = 0; ok && k < at.length; k++) {
+            ok = Math.abs(found.get(k).onset - at[k]) <= rate / 1000 && found.get(k).start <= found.get(k).onset;
+        }
+        check("splitter: 12 hits in a noisy take, onsets within 1 ms (found " + found.size() + ")", ok);
+    }
+
+    private static void splitterSeparatesFastButterflyTake() {
+        int rate = 48000;
+        float[] take = new float[rate * 2];
+        int n = 0;
+        for (int t = rate / 10; t + 2000 < take.length; t += rate / 22) { // 22 clicks per second
+            for (int i = 0; i < 1500; i++) take[t + i] += (float) (0.6 * Math.exp(-i / 90.0) * Math.sin(i * 1.3));
+            n++;
+        }
+        meowtils.extension.soundgen.tools.Splitter.Options o = new meowtils.extension.soundgen.tools.Splitter.Options();
+        o.minGapMs = 25;
+        int found = meowtils.extension.soundgen.tools.Splitter.find(take, rate, o).size();
+        check("splitter: 22 CPS take separated (" + found + "/" + n + ")", found == n);
+    }
+
+    private static void toolSplitsReportsAndPreviews() throws IOException {
+        File root = Files.createTempDirectory("sgtool").toFile();
+        File pack = new File(root, "pack");
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"init", pack.getPath()});
+        // 5 press/release pairs (150 ms hold, 700 ms apart) plus one stray hit that must be skipped
+        float[] take = new float[48000 * 5];
+        int[] hits = {4800, 12000, 38400, 45600, 72000, 79200, 105600, 112800, 139200, 146400, 180000};
+        for (int t : hits) {
+            for (int i = 0; i < 1000; i++) take[t + i] = (float) (0.5 * Math.exp(-i / 120.0) * Math.sin(i * 0.7));
+        }
+        File wav = writeWav(new File(root, "take.wav"), take, 48000, 1, 1, 24, false);
+        File down = new File(pack, "key_down"), up = new File(pack, "key_up");
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"split", wav.getPath(), down.getPath(), "--alternate", up.getPath()});
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"split", wav.getPath(), down.getPath(), "--alternate", up.getPath()});
+        check("split pairs press/release, skips strays, numbers re-takes after existing files",
+                new File(down, "key_down_010.wav").isFile() && new File(up, "key_up_010.wav").isFile()
+                        && !new File(down, "key_down_011.wav").exists() && !new File(up, "key_up_011.wav").exists());
+        SampleBank.Result bank = SampleBank.load(pack, true, true);
+        check("split files load back as recordings", bank.recorded == 20 && !bank.sets[Sound.W_DOWN.ordinal()].placeholder);
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"report", pack.getPath()});
+        File preview = new File(root, "preview.wav");
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"preview", pack.getPath(), "key_down", preview.getPath(), "--seconds", "2"});
+        check("preview rendered", preview.length() > 48000 * 3);
+    }
+
     private static void cpuCost() {
         AudioEngine e = new AudioEngine(() -> fakeNanos);
         fakeNanos = 0;
-        e.setSamples(SampleBank.load(tempDir(), true).sets);
+        e.setSamples(SampleBank.load(tempDir(), true, true).sets);
         int blocks = AudioEngine.RATE * 60 / AudioEngine.BLOCK; // one minute of audio
         // warm up the JIT, then measure: 8 new clicks every 2.7 ms (~3000 clicks/s), far beyond real use
         for (int pass = 0; pass < 2; pass++) {

@@ -47,10 +47,11 @@ public final class AudioEngine {
     private volatile float masterGain = 1f;
     private volatile float gainJitter = 0.1f;
     private volatile float pitchJitter = 0.03f;
+    private volatile int selection = SampleSet.SHUFFLE;
 
     // Audio-thread state
     private long frameClock;
-    private long random = 0x9E3779B97F4A7C15L;
+    private final Rng rng = new Rng(System.nanoTime());
     private volatile int activeVoices;
     private volatile int stolenVoices;
     private volatile boolean clipped;
@@ -106,6 +107,11 @@ public final class AudioEngine {
     /** Random per-hit playback-rate variation, 0..1 (0.03 = ±3 %). */
     public void setPitchJitter(float jitter) {
         pitchJitter = jitter;
+    }
+
+    /** {@link SampleSet#SHUFFLE} or {@link SampleSet#RANDOM}. */
+    public void setSelection(int mode) {
+        selection = mode;
     }
 
     public boolean isRunning() {
@@ -356,7 +362,7 @@ public final class AudioEngine {
     private void startVoice(int soundId, int tag, float gain, long start, boolean loop) {
         SampleSet[] sets = this.sets;
         if (soundId >= sets.length || sets[soundId] == null) return;
-        Sample sample = sets[soundId].pick(nextRandom());
+        Sample sample = sets[soundId].pick(rng, selection);
         if (sample.data.length < 2) return;
 
         Voice v = allocate();
@@ -369,14 +375,14 @@ public final class AudioEngine {
         v.fadeTotal = 1;
         if (loop) {
             // Start somewhere random in the take so repeated holds don't all begin identically.
-            v.pos = (nextRandom() >>> 11) % sample.data.length;
+            v.pos = rng.nextInt(sample.data.length);
             v.inc = 1.0;
             v.gain = gain;
             v.fadeInLeft = LOOP_FADE_IN_FRAMES;
         } else {
             v.pos = 0;
-            v.inc = 1.0 + pitchJitter * signedUnit();
-            v.gain = gain * (1f + gainJitter * (float) signedUnit());
+            v.inc = 1.0 + pitchJitter * rng.signedUnit();
+            v.gain = gain * (1f + gainJitter * (float) rng.signedUnit());
             v.fadeInLeft = 0;
         }
         v.active = true;
@@ -410,20 +416,6 @@ public final class AudioEngine {
                 v.fadeLeft = fadeFrames;
             }
         }
-    }
-
-    private long nextRandom() {
-        long x = random;
-        x ^= x << 13;
-        x ^= x >>> 7;
-        x ^= x << 17;
-        random = x;
-        return x;
-    }
-
-    /** Uniform in [-1, 1). */
-    private double signedUnit() {
-        return ((nextRandom() >>> 11) * 0x1.0p-53) * 2.0 - 1.0;
     }
 
     private static final class Voice {

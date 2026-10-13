@@ -16,25 +16,31 @@ import java.nio.file.Files;
  * Supports integer PCM at 8/16/24/32 bits and IEEE float at 32/64 bits, any channel
  * count (channels are averaged to mono).
  */
-final class WavDecoder {
+public final class WavDecoder {
     private static final int FORMAT_PCM = 1;
     private static final int FORMAT_FLOAT = 3;
     private static final int FORMAT_EXTENSIBLE = 0xFFFE;
 
-    static final class Decoded {
-        final float[] mono;
-        final int rate;
+    public static final class Decoded {
+        public final float[] mono;
+        public final int rate;
+        public final int channels;
+        public final int bits;
+        public final boolean floating;
 
-        Decoded(float[] mono, int rate) {
+        Decoded(float[] mono, int rate, int channels, int bits, boolean floating) {
             this.mono = mono;
             this.rate = rate;
+            this.channels = channels;
+            this.bits = bits;
+            this.floating = floating;
         }
     }
 
     private WavDecoder() {
     }
 
-    static Decoded decode(File file) throws IOException {
+    public static Decoded decode(File file) throws IOException {
         ByteBuffer buf = ByteBuffer.wrap(Files.readAllBytes(file.toPath())).order(ByteOrder.LITTLE_ENDIAN);
         if (buf.remaining() < 12 || buf.getInt(0) != 0x46464952 /* RIFF */ || buf.getInt(8) != 0x45564157 /* WAVE */) {
             throw new IOException("not a RIFF/WAVE file");
@@ -79,7 +85,7 @@ final class WavDecoder {
             }
             mono[f] = sum * scale;
         }
-        return new Decoded(mono, rate);
+        return new Decoded(mono, rate, channels, bits, format == FORMAT_FLOAT);
     }
 
     private static float read(ByteBuffer buf, int at, int format, int bits) throws IOException {

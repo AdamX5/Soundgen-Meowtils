@@ -23,6 +23,8 @@ public final class SampleBank {
     private static final double PRE_ROLL_MS = 0.5;
     private static final double FADE_OUT_MS = 3.0;
     private static final double LOOP_CROSSFADE_MS = 10.0;
+    /** Level matching never moves a variation by more than this (12 dB), so noise isn't boosted. */
+    private static final float MAX_MATCH_GAIN = 4f;
 
     public static final class Result {
         public final SampleSet[] sets;
@@ -41,7 +43,13 @@ public final class SampleBank {
     private SampleBank() {
     }
 
-    public static Result load(File root, boolean autoTrim) {
+    /**
+     * @param root      the pack folder (one sub-folder per {@link Sound})
+     * @param autoTrim  cut leading/trailing silence from one-shots
+     * @param matchLevels scale each variation's peak to its set's median peak, so a pile of
+     *                  re-recordings made at slightly different distances plays evenly
+     */
+    public static Result load(File root, boolean autoTrim, boolean matchLevels) {
         List<String> warnings = new ArrayList<String>();
         ensureLayout(root, warnings);
 
@@ -50,6 +58,7 @@ public final class SampleBank {
         int recorded = 0;
         for (Sound sound : Sound.values()) {
             own[sound.ordinal()] = loadFolder(new File(root, sound.folder), sound, autoTrim, warnings);
+            if (matchLevels && !sound.loop) matchLevels(own[sound.ordinal()]);
             recorded += own[sound.ordinal()].length;
         }
 
@@ -99,8 +108,30 @@ public final class SampleBank {
         return out.toArray(new Sample[0]);
     }
 
+    static float peak(float[] data) {
+        float peak = 0;
+        for (float v : data) peak = Math.max(peak, Math.abs(v));
+        return peak;
+    }
+
+    /** Scales every variation's peak towards the set's median peak (in place). */
+    static void matchLevels(Sample[] samples) {
+        if (samples.length < 2) return;
+        float[] peaks = new float[samples.length];
+        for (int i = 0; i < samples.length; i++) peaks[i] = peak(samples[i].data);
+        float[] sorted = peaks.clone();
+        Arrays.sort(sorted);
+        float target = sorted[sorted.length / 2];
+        for (int i = 0; i < samples.length; i++) {
+            if (peaks[i] <= 0) continue;
+            float g = Math.max(1f / MAX_MATCH_GAIN, Math.min(MAX_MATCH_GAIN, target / peaks[i]));
+            float[] d = samples[i].data;
+            for (int k = 0; k < d.length; k++) d[k] *= g;
+        }
+    }
+
     /** Cubic Hermite resampling. Recording at 48 kHz skips this entirely. */
-    static float[] resample(float[] in, int from, int to) {
+    public static float[] resample(float[] in, int from, int to) {
         if (from == to || in.length < 2) return in;
         double step = from / (double) to;
         int frames = (int) Math.floor((in.length - 1) / step) + 1;
@@ -128,8 +159,7 @@ public final class SampleBank {
      * silent tail so voices free up sooner. Short fades stop the cuts from clicking.
      */
     static float[] trim(float[] in) {
-        float peak = 0;
-        for (float v : in) peak = Math.max(peak, Math.abs(v));
+        float peak = peak(in);
         if (peak == 0) return new float[0];
 
         int onset = 0;
@@ -180,7 +210,8 @@ public final class SampleBank {
         return (int) Math.round(ms * AudioEngine.RATE / 1000.0);
     }
 
-    private static void ensureLayout(File root, List<String> warnings) {
+    /** Creates the pack's slot folders and README if missing. */
+    public static void ensureLayout(File root, List<String> warnings) {
         for (Sound sound : Sound.values()) {
             File dir = new File(root, sound.folder);
             if (!dir.isDirectory() && !dir.mkdirs()) {
@@ -190,21 +221,24 @@ public final class SampleBank {
         File readme = new File(root, "README.txt");
         if (readme.exists()) return;
         try (PrintWriter w = new PrintWriter(readme, StandardCharsets.UTF_8.name())) {
-            w.println("SoundGen sound folders");
-            w.println("======================");
-            w.println("Put .wav files in these folders. Every file in a folder is one variation;");
-            w.println("the engine picks a different one each time so repeats don't sound robotic.");
+            w.println("SoundGen sound pack");
+            w.println("===================");
+            w.println("One folder per sound slot. Every .wav in a folder is one variation. With");
+            w.println("Variation Order = Shuffle, every variation plays once before any repeats.");
             w.println();
-            w.println("Best format: 48000 Hz, mono, 16/24-bit or 32-bit float. Other rates are resampled.");
-            w.println("One click/keypress per file for everything except drag_loop.");
-            w.println("drag_loop: continuous drag-click takes, 2-5 seconds each.");
-            w.println("Leading silence is trimmed automatically (toggle: Auto Trim) so timing stays tight.");
+            w.println("Format: 48000 Hz mono is ideal; 16/24-bit PCM or 32-bit float. Others are resampled.");
+            w.println("One hit per file, except drag_loop (continuous drag-click takes, 2-5 s each).");
             w.println();
-            w.println("Per-key folders (w_down, space_up, ...) are optional: an empty one falls back");
-            w.println("to key_down / key_up. drag_end falls back to drag.");
-            w.println("Empty folders with no fallback recordings use a synthesised placeholder.");
+            w.println("Easiest way to fill a folder: record one long take of many hits, then");
+            w.println("  soundtool split take.wav <this pack>/butterfly");
+            w.println("For press+release takes (keys):");
+            w.println("  soundtool split take.wav <this pack>/key_down --alternate <this pack>/key_up");
+            w.println("Check a pack:  soundtool report <this pack>");
             w.println();
-            w.println("Press 'Reload Sounds' in the module settings after adding files.");
+            w.println("Per-key folders (w_down, space_up, ...) are optional: empty ones use key_down /");
+            w.println("key_up. drag_end uses drag. Slots with nothing at all use a synthesised placeholder.");
+            w.println();
+            w.println("After adding files press 'Reload Sounds' in the module settings (Sounds section).");
         } catch (IOException e) {
             warnings.add("could not write README: " + e.getMessage());
         }

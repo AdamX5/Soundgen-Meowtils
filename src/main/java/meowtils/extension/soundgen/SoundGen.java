@@ -2,6 +2,7 @@ package meowtils.extension.soundgen;
 
 import meowtils.extension.soundgen.engine.AudioEngine;
 import meowtils.extension.soundgen.engine.SampleBank;
+import meowtils.extension.soundgen.engine.SampleSet;
 import meowtils.extension.soundgen.engine.Sound;
 import meowtils.extension.soundgen.input.ClickChannel;
 import meowtils.extension.soundgen.input.KeyChannel;
@@ -75,6 +76,7 @@ public class SoundGen extends Extension {
     static final List<String> CLICK_STYLES = Arrays.asList("Clicks", "Loop");
     static final List<String> RELEASE_MODES = Arrays.asList("Real", "Synthetic", "Off");
     static final List<String> TIMING_MODES = Arrays.asList("Spread", "Instant");
+    static final List<String> SELECTION_MODES = Arrays.asList("Shuffle", "Random");
 
     private static final String[] CLICK_SHORT_R = {"game", "place", "pkt", "key", "raw"};
     private static final String[] CLICK_SHORT_L = {"game", "atk", "pkt", "key", "raw"};
@@ -91,7 +93,10 @@ public class SoundGen extends Extension {
 
     @Config public String outputDevice = "";
     @Config public int bufferMs = 20;
+    @Config public String soundPack = "default";
+    @Config public String selection = "Shuffle";
     @Config public boolean autoTrim = true;
+    @Config public boolean matchLevels = true;
 
     @Config public String timingMode = "Spread";
     @Config public int clickJitterMs = 3;
@@ -165,9 +170,15 @@ public class SoundGen extends Extension {
         expand("Output", e -> {
             e.text("Output Device", "outputDevice");
             e.slider("Buffer", 5, 100, 1, "ms", "bufferMs", int.class);
-            e.check("Auto Trim", "autoTrim");
             e.button("Apply Output", 1f, this::restartAudio);
             e.button("List Devices", 1f, this::listDevices);
+        });
+
+        expand("Sounds", e -> {
+            e.text("Sound Pack", "soundPack");
+            e.mode("Variation Order", SELECTION_MODES, "selection");
+            e.check("Auto Trim", "autoTrim");
+            e.check("Match Levels", "matchLevels");
             e.button("Reload Sounds", 1f, this::reloadSounds);
             e.button("Test Sounds", 1f, this::testSounds);
         });
@@ -240,8 +251,11 @@ public class SoundGen extends Extension {
         wasOnGround = true;
     }
 
+    /** {@code <game dir>/meowtils/soundgen/packs/<pack>}. The pack name is sanitised so it can't escape that folder. */
     private File soundDir() {
-        return new File(Meowtils.MEOWTILS_DIR, "soundgen");
+        String pack = soundPack == null ? "" : soundPack.trim().replaceAll("[^A-Za-z0-9 _.-]", "").replace("..", "");
+        if (pack.isEmpty()) pack = "default";
+        return new File(new File(new File(Meowtils.MEOWTILS_DIR, "soundgen"), "packs"), pack);
     }
 
     private void restartAudio() {
@@ -262,12 +276,13 @@ public class SoundGen extends Extension {
         if (!loading.compareAndSet(false, true)) return;
         final File dir = soundDir();
         final boolean trim = autoTrim;
+        final boolean match = matchLevels;
         Thread t = new Thread(() -> {
             try {
-                SampleBank.Result result = SampleBank.load(dir, trim);
+                SampleBank.Result result = SampleBank.load(dir, trim, match);
                 engine.setSamples(result.sets);
-                messages.add("loaded " + result.recorded + " recordings; " + result.placeholders
-                        + " slots using placeholders (" + dir + ")");
+                messages.add("pack '" + dir.getName() + "': " + result.recorded + " recordings loaded, "
+                        + result.placeholders + " slots on placeholders");
                 for (String warning : result.warnings) messages.add("§c" + warning);
             } catch (RuntimeException e) {
                 messages.add("§csound loading failed: " + e);
@@ -298,6 +313,7 @@ public class SoundGen extends Extension {
         engine.setMasterGain(masterVolume / 100f);
         engine.setGainJitter(volumeVariation / 100f);
         engine.setPitchJitter(pitchVariation / 100f);
+        engine.setSelection(index(SELECTION_MODES, selection) == 1 ? SampleSet.RANDOM : SampleSet.SHUFFLE);
 
         timing.spread = !"Instant".equals(timingMode);
         timing.clickJitterMs = clickJitterMs;

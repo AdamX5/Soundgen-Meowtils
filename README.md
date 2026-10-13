@@ -4,6 +4,8 @@ Turns what your character does in game into mouse and keyboard sounds for ASMR r
 
 Targets Meowtils 2.0.x on Lunar / Forge 1.8.9.
 
+**New here? Follow [docs/GUIDE.md](docs/GUIDE.md)**: step by step from setup to recording, splitting and tuning variations.
+
 ## Status
 
 The engine and the action detection are built. No sounds have been recorded yet: every sound slot uses a synthesised placeholder until you add `.wav` files.
@@ -49,16 +51,33 @@ Raw methods are checked every frame and always play immediately.
 - **Clicks**: one sample per detected click.
 - **Loop**: a recorded drag-click rattle plays while clicks keep arriving. It fades out after **Loop Hold Timeout** with no clicks, or immediately on release when the method is Keybind or Raw Mouse. Optional **Loop End Click** plays one last click at the end.
 
-## Sounds
+## Sounds and variations
 
-Folders are created at `.minecraft/meowtils/soundgen/<slot>/` the first time the module is enabled; a README inside lists them. Every `.wav` file in a folder is one variation, and the engine never plays the same variation twice in a row.
+Sounds live in packs at `<game dir>/meowtils/soundgen/packs/<pack>/<slot>/`. Pick the pack with the **Sound Pack** setting. Every `.wav` file in a slot folder is one variation.
 
-- `drag`, `butterfly`, `drag_end`: one click per file
-- `drag_loop`: continuous drag-click takes, 2–5 s each (the loop point is crossfaded automatically)
-- `key_down`, `key_up`: shared by every key
-- `w_down`, `space_up`, `shift_down`, …: optional per-key overrides (an empty folder falls back to `key_down`/`key_up`)
+- **Variation Order = Shuffle** (default): every variation plays once before any repeats, and never the same one twice in a row.
+- **Match Levels**: evens out loudness between re-records made at slightly different distances.
+- **Auto Trim**: cuts leading silence so each hit starts exactly on time.
 
-Record at 48 kHz mono if you can, so files don't need resampling; 16/24-bit PCM and 32-bit float are all fine. **Auto Trim** cuts leading silence so each click starts exactly when it's scheduled. Press **Reload Sounds** after adding files.
+| Slot | Contents |
+|---|---|
+| `butterfly`, `drag`, `drag_end` | one hit per file |
+| `drag_loop` | continuous drag-click takes, 2–5 s each (the loop point is crossfaded automatically) |
+| `key_down`, `key_up` | shared by every key |
+| `w_down`, `space_up`, `shift_down`, … | optional per-key overrides (an empty folder falls back to `key_down`/`key_up`) |
+
+### Sound tool
+
+Run with `soundtool.bat` / `soundtool.sh` after building (plain Java, no game needed):
+
+```
+soundtool split take.wav <pack>/butterfly --gap 25           # one long take -> many numbered variations
+soundtool split keys.wav <pack>/key_down --alternate <pack>/key_up   # press/release pairs, matched by timing
+soundtool report <pack>                                      # counts, levels, problems per slot
+soundtool preview <pack> butterfly out.wav --cps 15          # hear a slot through the real engine
+```
+
+Re-recordings are numbered after the existing files and never overwrite them.
 
 ## Getting it into your mic (Maono G1 Neo)
 
@@ -83,12 +102,12 @@ To hear the sounds yourself while they go to the cable, turn on Windows "Listen 
 
 1. Download the Meowtils jar from [the releases page](https://github.com/femboytatp/meowtils/releases) and save it as `libs/meowtils.jar`.
 2. Run `./gradlew build`. This needs Java 8 (ForgeGradle 2.1).
-3. Copy `build/libs/SoundGen-<version>.meowtils` into the Meowtils extensions folder.
+3. Copy `build/libs/SoundGen-<version>.meowtils` into `<game dir>/meowtils/extensions/`. You don't modify Meowtils itself; `libs/meowtils.jar` is only for compiling.
 
 The engine self-test needs no Minecraft:
 
 ```
-javac -d out $(find src/main/java/meowtils/extension/soundgen/engine src/main/java/meowtils/extension/soundgen/input src/test/java -name '*.java')
+javac -d out $(find src/main/java/meowtils/extension/soundgen/engine src/main/java/meowtils/extension/soundgen/input src/main/java/meowtils/extension/soundgen/tools src/test/java -name '*.java')
 java -cp out meowtils.extension.soundgen.engine.EngineSelfTest
 ```
 
