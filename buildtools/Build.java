@@ -113,16 +113,11 @@ public final class Build {
         // Create the default pack layout with the built tool itself (also proves the jar runs).
         run(jar.toString(), "meowtils.extension.soundgen.tools.SoundTool", "init",
                 dropin.resolve(DATA_FOLDER + "/soundgen/packs/default").toString());
-        // Recording helpers: double-click importer + a ready-made recordings tree for two packs.
+        // Recording helpers: double-click importer + the recordings folder it reads.
         Path soundgenData = dropin.resolve(DATA_FOLDER + "/soundgen");
         Files.write(soundgenData.resolve("import-sounds.bat"), crlf(root.resolve("buildtools/dropin/import-sounds.bat")));
         Path recordings = soundgenData.resolve("recordings");
-        for (String pack : new String[]{"close", "far"}) {
-            for (String sound : new String[]{"butterfly", "right_click", "drag_loop", "drag_end", "key", "space", "shift", "tab", "backspace"}) {
-                Files.createDirectories(recordings.resolve(pack).resolve(sound));
-            }
-            run(jar.toString(), "meowtils.extension.soundgen.tools.SoundTool", "init", soundgenData.resolve("packs/" + pack).toString());
-        }
+        Files.createDirectories(recordings);
         Files.write(recordings.resolve("README.txt"), crlf(root.resolve("buildtools/dropin/RECORDINGS-README.txt")));
         Files.write(dropin.resolve("HOW-TO-INSTALL.txt"), installText(version).getBytes(StandardCharsets.UTF_8));
         Path zip = build.resolve("SoundGen-" + version + "-dropin.zip");
@@ -151,8 +146,8 @@ public final class Build {
                 "",
                 "3. '" + DATA_FOLDER + "'",
                 "   Drag the 'soundgen' folder into  meowtils  and merge if asked.",
-                "   It also contains recordings\\ (put your raw takes there) and import-sounds.bat",
-                "   (double-click: cuts the takes into the sound packs).",
+                "   It also contains recordings\\ (drop your raw WAV takes there) and import-sounds.bat",
+                "   (double-click: cuts and sorts the takes into packs\\default).",
                 "   This holds the sound folders you record into. Optional on first install:",
                 "   SoundGen creates the same folders itself the first time it is enabled.",
                 "   It never overwrites your recordings (the folders only contain a README).",

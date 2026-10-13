@@ -55,6 +55,9 @@ public final class SoundTool {
                 case "import":
                     importTakes(rest);
                     break;
+                case "import-files":
+                    importFiles(rest);
+                    break;
                 default:
                     usage();
                     System.exit(2);
@@ -96,6 +99,16 @@ public final class SoundTool {
                 "                                                              into <name>_down and <name>_up)",
                 "      Every new take is cut into the right pack folders. Takes already imported",
                 "      are remembered (imported.txt) and skipped, so just add takes and run it again.",
+                "",
+                "  import-files <folder> <pack> [--dry-run]",
+                "      For takes named by what they contain, all in one folder:",
+                "        quick-<sound>.wav          one-shot taps/clicks      (quick-small_keys, quick-click, ...)",
+                "        press_unpress-<sound>.wav  press, release, press...  (starts with a press, even count)",
+                "        drag_click-long|medium     drag-click runs  -> drag_loop",
+                "        drag_click-short           drag-click bursts -> drag_burst",
+                "      <sound>: small_keys/key, space, shift, tab, backspace, click (mouse).",
+                "      Quiet recordings are fine: one shared gain (remembered in gain.txt) brings the",
+                "      loudest hit to -1 dB and keeps every other level relative to it.",
                 "",
                 "  report <pack>",
                 "      Per slot: variation count, levels, lengths, and problems to fix.",
@@ -280,7 +293,8 @@ public final class SoundTool {
 
         File[] dirs = takesRoot.listFiles(File::isDirectory);
         if (dirs == null || dirs.length == 0) {
-            throw new IllegalArgumentException("no sub-folders in " + takesRoot + " (make one per sound, e.g. butterfly, key, space)");
+            System.out.println("no sound sub-folders in " + takesRoot);
+            return;
         }
         Arrays.sort(dirs);
         int total = 0;
@@ -323,6 +337,197 @@ public final class SoundTool {
         }
         System.out.println(dryRun ? "dry run: nothing written" : total + " files added to " + pack.getAbsolutePath());
         if (newlyDone.isEmpty()) System.out.println("nothing new to import (delete " + IMPORTED_LIST + " to re-import everything)");
+    }
+
+    // ------------------------------------------------------------------ import-files (named takes)
+
+    private static final class Plan {
+        final File file;
+        final String kind; // quick, pair, run, burst
+        final Sound[] targets;
+        final Sound up;
+        WavDecoder.Decoded audio;
+
+        Plan(File file, String kind, Sound[] targets, Sound up) {
+            this.file = file;
+            this.kind = kind;
+            this.targets = targets;
+            this.up = up;
+        }
+    }
+
+    /** Works out from a file name what a take contains and where it goes; null if unknown. */
+    static Plan plan(File file) {
+        String base = file.getName().toLowerCase(Locale.ROOT).replaceAll("\\.wav$", "")
+                .replace("press-unpress", "press_unpress").replace("drag-click", "drag_click");
+        int dash = base.indexOf('-');
+        if (dash < 0) return null;
+        String kind = base.substring(0, dash);
+        String subject = base.substring(dash + 1).replaceAll("[_ ]?keys?$", "").replaceAll("[ _-]?\\d+$", "");
+        if (subject.isEmpty() || subject.equals("small") || subject.equals("normal")) subject = "key";
+        if (subject.equals("click") || subject.equals("clicks")) subject = "mouse";
+        switch (kind) {
+            case "drag_click":
+                if (subject.startsWith("short") || subject.startsWith("burst")) {
+                    return new Plan(file, "burst", new Sound[]{Sound.DRAG_BURST}, null);
+                }
+                return new Plan(file, "run", new Sound[]{Sound.DRAG_LOOP}, null);
+            case "quick":
+                if (subject.equals("mouse")) {
+                    return new Plan(file, "quick", new Sound[]{Sound.BUTTERFLY, Sound.RIGHT_CLICK, Sound.DRAG}, null);
+                }
+                Sound tap = slot(subject + "_tap");
+                return tap == null ? null : new Plan(file, "quick", new Sound[]{tap}, null);
+            case "press_unpress":
+                Sound down = slot(subject + "_down"), up = slot(subject + "_up");
+                return down == null || up == null ? null : new Plan(file, "pair", new Sound[]{down}, up);
+            default:
+                return null;
+        }
+    }
+
+    /** "kind target [up]" for a file name, or "unknown" (used by the self-test). */
+    public static String describePlan(File file) {
+        Plan p = plan(file);
+        if (p == null) return "unknown";
+        return p.kind + " " + p.targets[0].folder + (p.up == null ? "" : " " + p.up.folder);
+    }
+
+    private static void importFiles(String[] args) throws IOException {
+        boolean dryRun = false;
+        List<String> positional = new ArrayList<String>();
+        for (String a : args) {
+            if (a.equals("--dry-run")) {
+                dryRun = true;
+            } else if (a.startsWith("--")) {
+                throw new IllegalArgumentException("unknown option " + a);
+            } else {
+                positional.add(a);
+            }
+        }
+        if (positional.size() != 2) throw new IllegalArgumentException("import-files needs <folder> <pack>");
+        File folder = new File(positional.get(0));
+        File pack = new File(positional.get(1));
+        if (!folder.isDirectory()) throw new IOException("no such folder: " + folder);
+
+        File list = new File(folder, IMPORTED_LIST);
+        java.util.Set<String> done = new java.util.HashSet<String>();
+        if (list.isFile()) done.addAll(java.nio.file.Files.readAllLines(list.toPath(), java.nio.charset.StandardCharsets.UTF_8));
+
+        File[] wavs = folder.listFiles((d, n) -> n.toLowerCase().endsWith(".wav"));
+        List<Plan> plans = new ArrayList<Plan>();
+        if (wavs != null) {
+            Arrays.sort(wavs);
+            for (File w : wavs) {
+                if (done.contains(w.getName())) continue;
+                Plan p = plan(w);
+                if (p == null) {
+                    System.out.println("skipped " + w.getName() + ": name not recognised (see 'soundtool' for the naming)");
+                } else {
+                    plans.add(p);
+                }
+            }
+        }
+        if (plans.isEmpty()) {
+            System.out.println("no new named takes in " + folder);
+            return;
+        }
+        if (!dryRun) SampleBank.ensureLayout(pack, new ArrayList<String>());
+
+        // One gain for everything, so relative levels (space vs small keys, soft vs hard hits) stay real.
+        float peak = 0;
+        for (Plan p : plans) {
+            p.audio = WavDecoder.decode(p.file);
+            peak = Math.max(peak, SampleBank.peak(p.audio.mono));
+        }
+        File gainFile = new File(folder, "gain.txt");
+        float gain;
+        if (gainFile.isFile()) {
+            gain = Float.parseFloat(new String(java.nio.file.Files.readAllBytes(gainFile.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8).trim());
+            System.out.printf("using saved gain %+.1f dB (gain.txt; delete it to recalculate)%n", 20 * Math.log10(gain));
+        } else {
+            gain = peak > 0 ? Math.min(1000f, 0.89f / peak) : 1f;
+            System.out.printf("loudest hit %.1f dB -> gain %+.1f dB for this pack (saved to gain.txt)%n", db(peak), 20 * Math.log10(gain));
+            if (!dryRun) java.nio.file.Files.write(gainFile.toPath(), Float.toString(gain).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+
+        int total = 0;
+        List<String> newlyDone = new ArrayList<String>();
+        for (Plan p : plans) {
+            float[] x = p.audio.mono;
+            int rate = p.audio.rate;
+            List<Splitter.Slice> slices;
+            int[] role = null;
+            switch (p.kind) {
+                case "quick": {
+                    Splitter.Options o = new Splitter.Options();
+                    o.minGapMs = p.targets[0] == Sound.BUTTERFLY ? 90 : 120; // keep a tap's own release inside it
+                    slices = Splitter.find(x, rate, o);
+                    break;
+                }
+                case "pair": {
+                    Splitter.Options o = new Splitter.Options();
+                    o.minGapMs = 30;
+                    o.thresholdDb = 40; // releases are quiet
+                    slices = Splitter.find(x, rate, o);
+                    if (slices.size() % 2 == 0) {
+                        role = new int[slices.size()];
+                        for (int i = 0; i < role.length; i++) role[i] = i % 2; // starts with a press
+                    } else {
+                        System.out.println("  note: odd number of hits (" + slices.size() + "): pairing by timing instead");
+                        role = Splitter.pairByGaps(slices);
+                    }
+                    break;
+                }
+                case "run":
+                    slices = Splitter.segments(x, rate, 40, 250, 1000);
+                    break;
+                default: // burst
+                    slices = Splitter.segments(x, rate, 40, 200, 60);
+                    break;
+            }
+            StringBuilder where = new StringBuilder();
+            for (Sound t : p.targets) where.append(where.length() == 0 ? "" : ", ").append(t.folder);
+            if (p.up != null) where.append(" / ").append(p.up.folder);
+            System.out.printf("%s: %d %s -> %s%n", p.file.getName(), slices.size(),
+                    p.kind.equals("run") ? "runs" : p.kind.equals("burst") ? "bursts" : "hits", where);
+            for (Sound target : p.targets) {
+                total += writeSlices(x, rate, slices, role, 0, new File(pack, target.folder), gain, dryRun);
+            }
+            if (p.up != null) total += writeSlices(x, rate, slices, role, 1, new File(pack, p.up.folder), gain, dryRun);
+            newlyDone.add(p.file.getName());
+        }
+        if (!dryRun) {
+            java.nio.file.Files.write(list.toPath(), newlyDone, java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        }
+        System.out.println(dryRun ? "dry run: nothing written" : total + " files added to " + pack.getAbsolutePath());
+    }
+
+    /** Writes the slices whose role matches (all of them when {@code role} is null), scaled by {@code gain}. */
+    private static int writeSlices(float[] x, int rate, List<Splitter.Slice> slices, int[] role, int want, File dir,
+                                   float gain, boolean dryRun) throws IOException {
+        String prefix = dir.getName();
+        int next = nextNumber(dir, prefix);
+        int written = 0, clipped = 0;
+        for (int i = 0; i < slices.size(); i++) {
+            if (role != null && role[i] != want) continue;
+            if (dryRun) {
+                written++;
+                continue;
+            }
+            float[] d = Splitter.extract(x, slices.get(i), rate);
+            for (int k = 0; k < d.length; k++) {
+                d[k] *= gain;
+                if (Math.abs(d[k]) > 1f) clipped++;
+            }
+            mkdirs(dir);
+            WavWriter.write24(new File(dir, String.format("%s_%03d.wav", prefix, next++)), d, rate);
+            written++;
+        }
+        if (clipped > 0) System.out.println("  warning: " + clipped + " samples clipped in " + prefix);
+        return dryRun ? 0 : written;
     }
 
     /** Loop takes aren't split: the first and last 0.2 s (finger landing / lifting) are cut off. */

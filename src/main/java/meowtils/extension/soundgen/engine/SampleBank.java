@@ -108,7 +108,7 @@ public final class SampleBank {
         return out.toArray(new Sample[0]);
     }
 
-    static float peak(float[] data) {
+    public static float peak(float[] data) {
         float peak = 0;
         for (float v : data) peak = Math.max(peak, Math.abs(v));
         return peak;

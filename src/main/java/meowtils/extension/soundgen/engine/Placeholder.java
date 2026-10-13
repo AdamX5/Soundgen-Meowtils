@@ -19,7 +19,9 @@ enum Placeholder {
     WIDE_DOWN(620, 9.0, 70, 0.40, 0.40),
     WIDE_UP(850, 6.0, 50, 0.45, 0.24),
     /** A continuous drag-click rattle, roughly 25 CPS with irregular spacing. */
-    RATTLE(2200, 2.5, 2000, 0.50, 0.32);
+    RATTLE(2200, 2.5, 2000, 0.50, 0.32),
+    /** A short rattle (about 0.4 s) that ends naturally. */
+    BURST(2200, 2.5, 400, 0.50, 0.32);
 
     private static final int VARIATIONS = 4;
 
@@ -34,7 +36,7 @@ enum Placeholder {
     }
 
     Sample[] build(int rate, String name) {
-        if (this == RATTLE) {
+        if (this == RATTLE || this == BURST) {
             return new Sample[]{rattle(rate, name, new Random(0x5EED))};
         }
         Sample[] out = new Sample[VARIATIONS];

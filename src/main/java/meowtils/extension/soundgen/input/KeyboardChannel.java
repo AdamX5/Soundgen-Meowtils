@@ -24,6 +24,7 @@ public final class KeyboardChannel {
     private final Timing timing;
     private final Sound[] downFor = new Sound[KEYS];
     private final Sound[] upFor = new Sound[KEYS];
+    private final Sound[] tapFor = new Sound[KEYS];
     private final boolean[] isDown = new boolean[KEYS];
     private final boolean[] sounded = new boolean[KEYS];
     private final long[] pressedAt = new long[KEYS];
@@ -31,6 +32,8 @@ public final class KeyboardChannel {
 
     public volatile boolean enabled = true;
     public volatile boolean release = true;
+    /** Tap mode: one combined press+release recording at the press, no separate release. */
+    public volatile boolean tap = false;
     public volatile float gain = 1f;
     public volatile int minHoldMs = 30;
 
@@ -39,12 +42,14 @@ public final class KeyboardChannel {
         this.timing = timing;
         java.util.Arrays.fill(downFor, down);
         java.util.Arrays.fill(upFor, up);
+        java.util.Arrays.fill(tapFor, Sound.KEY_TAP);
     }
 
     /** Gives one key its own sounds. Call during setup only. */
-    public void setKeySound(int key, Sound down, Sound up) {
+    public void setKeySound(int key, Sound down, Sound up, Sound tapSound) {
         downFor[key] = down;
         upFor[key] = up;
+        tapFor[key] = tapSound;
     }
 
     // LWJGL 2 key codes (stable DirectInput scan codes)
@@ -61,15 +66,15 @@ public final class KeyboardChannel {
      * Fn has no key code (the keyboard handles it internally), so it can't make a sound.
      */
     public void applyKeySizes() {
-        setKeySound(KEY_TAB, Sound.TAB_DOWN, Sound.TAB_UP);
-        setKeySound(KEY_BACKSLASH, Sound.TAB_DOWN, Sound.TAB_UP);
-        setKeySound(KEY_LSHIFT, Sound.SHIFT_DOWN, Sound.SHIFT_UP);
-        setKeySound(KEY_RSHIFT, Sound.SHIFT_DOWN, Sound.SHIFT_UP);
-        setKeySound(KEY_CAPITAL, Sound.SHIFT_DOWN, Sound.SHIFT_UP);
-        setKeySound(KEY_BACK, Sound.BACKSPACE_DOWN, Sound.BACKSPACE_UP);
-        setKeySound(KEY_RETURN, Sound.BACKSPACE_DOWN, Sound.BACKSPACE_UP);
-        setKeySound(KEY_NUMPADENTER, Sound.BACKSPACE_DOWN, Sound.BACKSPACE_UP);
-        setKeySound(KEY_SPACE, Sound.SPACE_DOWN, Sound.SPACE_UP);
+        setKeySound(KEY_TAB, Sound.TAB_DOWN, Sound.TAB_UP, Sound.TAB_TAP);
+        setKeySound(KEY_BACKSLASH, Sound.TAB_DOWN, Sound.TAB_UP, Sound.TAB_TAP);
+        setKeySound(KEY_LSHIFT, Sound.SHIFT_DOWN, Sound.SHIFT_UP, Sound.SHIFT_TAP);
+        setKeySound(KEY_RSHIFT, Sound.SHIFT_DOWN, Sound.SHIFT_UP, Sound.SHIFT_TAP);
+        setKeySound(KEY_CAPITAL, Sound.SHIFT_DOWN, Sound.SHIFT_UP, Sound.SHIFT_TAP);
+        setKeySound(KEY_BACK, Sound.BACKSPACE_DOWN, Sound.BACKSPACE_UP, Sound.BACKSPACE_TAP);
+        setKeySound(KEY_RETURN, Sound.BACKSPACE_DOWN, Sound.BACKSPACE_UP, Sound.BACKSPACE_TAP);
+        setKeySound(KEY_NUMPADENTER, Sound.BACKSPACE_DOWN, Sound.BACKSPACE_UP, Sound.BACKSPACE_TAP);
+        setKeySound(KEY_SPACE, Sound.SPACE_DOWN, Sound.SPACE_UP, Sound.SPACE_TAP);
     }
 
     /**
@@ -84,8 +89,9 @@ public final class KeyboardChannel {
         if (pressed) {
             if (enabled && allowed && !handled) {
                 long at = now + timing.keyJitter();
-                engine.play(downFor[key], gain, at);
-                sounded[key] = true;
+                boolean asTap = tap;
+                engine.play(asTap ? tapFor[key] : downFor[key], gain, at);
+                sounded[key] = !asTap; // a tap already contains its release
                 pressedAt[key] = at;
                 presses++;
             }

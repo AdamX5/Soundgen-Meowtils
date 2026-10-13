@@ -275,30 +275,42 @@ Record **long takes with many hits**, not one file per click; the sound tool cut
 
 ## Part 5. Turning takes into variations
 
-### 5.0 The easy way: double-click
+### 5.0 The easy way: drop files, double-click
 
 After installing (Part 1), your meowtils folder has:
 
 ```
 %APPDATA%\.minecraft\meowtils\soundgen\
 ├── import-sounds.bat        ← double-click this
-├── recordings\
-│   ├── close\  butterfly\  right_click\  drag_loop\  drag_end\  key\  space\  shift\  tab\  backspace\
-│   └── far\    (the same folders)
-└── packs\
-    ├── close\   ← filled by import-sounds.bat
-    └── far\
+├── recordings\              ← drop your WAV takes here
+└── packs\default\           ← filled by import-sounds.bat (the pack SoundGen uses by default)
 ```
 
-1. Save each take (a long recording with many clicks or presses) into the matching folder, e.g. `recordings\close\butterfly\take1.wav`. Names don't matter; any number of takes per folder.
-   - `key`, `space`, `shift`, `tab`, `backspace` takes: press, hold ~0.2 s, release, **pause 0.6 s**. They are split into `<name>_down` and `<name>_up` automatically.
-   - `drag_loop`: one continuous run per file. It isn't cut up; only the first and last 0.2 s (finger landing and lifting) are removed.
-2. Double-click **`import-sounds.bat`**. It cuts every **new** take into the pack folders and prints a report per pack (what's still thin, anything clipped). Takes it has already done are remembered (`imported.txt`), so add more takes any time and run it again.
-3. In game: **Sounds → Sound Pack** = `close` (or `far`) → **Reload Sounds**.
+1. Name each take by what's in it and drop it into `recordings\`:
+
+| File name | Contains | Goes to |
+|---|---|---|
+| `quick-small_keys.wav` | quick taps (press + release in one go), any intensity | `key_tap` |
+| `quick-space_key.wav`, `quick-shift_key.wav`, `quick-tab_key.wav`, `quick-backspace_key.wav` | the same per key size | `space_tap`, `shift_tap`, `tab_tap`, `backspace_tap` |
+| `press_unpress-small_keys.wav` | press, release, press, release… (starts with a press, even count) | `key_down` / `key_up` |
+| `press_unpress-space_key.wav` (and `shift`, `tab`, `backspace`) | the same per key size | `space_down` / `space_up` … |
+| `quick-click.wav` | mouse clicks | `butterfly`, `right_click`, `drag` |
+| `press_unpress-click.wav` | mouse press, release… | `mouse_down` / `mouse_up` (kept for a later hold feature) |
+| `drag_click-long.wav`, `drag_click-medium.wav` | drag-click runs separated by silence | `drag_loop` (one take per run) |
+| `drag_click-short.wav` | short drag bursts separated by silence | `drag_burst` |
+
+   More takes of the same thing: add a number, e.g. `quick-click-2.wav`.
+
+2. Double-click **`import-sounds.bat`**. It cuts every **new** file, sorts the pieces into `packs\default\…`, and prints a report (counts, levels, anything clipped). Files already done are listed in `recordings\imported.txt`.
+3. In game: **Sounds → Reload Sounds** (Sound Pack stays `default`).
+
+**Quiet recordings are fine.** Peaks around −48 dB still split correctly, because detection is relative to each file's loudest hit. The first import picks **one gain for the whole pack** (loudest hit → −1 dB) and saves it in `recordings\gain.txt`. Later imports reuse it, so every level stays relative: space louder than small keys, soft taps softer.
 
 It needs Java installed once (Eclipse Temurin 21 from adoptium.net, tick "Add to PATH"); the bat tells you if it's missing.
 
-To undo a bad import, delete the new files from the pack folder and remove the take's line from `recordings\<pack>\imported.txt`.
+To undo an import, delete the new files from the pack folder and remove the file's line from `recordings\imported.txt`.
+
+**Folder layout (optional, for extra packs):** a sub-folder `recordings\<pack>\<sound>\*.wav` (e.g. `recordings\far\butterfly\take1.wav`) imports into `packs\<pack>`. Sound folder names: `butterfly`, `right_click`, `drag_loop`, `drag_end`, `key`, `space`, `shift`, `tab`, `backspace`.
 
 The rest of this part covers the same tool from the command line, for finer control.
 
@@ -414,6 +426,9 @@ This renders the slot through the real engine (same shuffle order, same volume a
 | Right Style | Clicks / Loop / **Auto** (single clicks when slow, drag rattle once fast) | Auto |
 | Drag Threshold | CPS at which Auto switches to the rattle | 8 |
 | Other Keys | sounds for every other key; Where = Everywhere (incl. chat) or In Game | on, Everywhere |
+| Release = **Tap** (any key section, and Other Keys Release) | plays one `*_tap` recording (press + release in one) at the press, no separate release | Real |
+| Drag Bursts / Burst Window | Auto: short fast clicking plays a `drag_burst` (natural end); the loop only starts if it lasts past the window | on, 350 ms |
+| Match Levels | evens loudness within a folder. **Leave off** if you recorded different intensities on purpose | off |
 
 **Multiple packs.** To compare two mice or two keyboards, make `packs/mouseA` and `packs/mouseB` (`soundtool init`), fill both, and switch with **Sound Pack** + **Reload Sounds**.
 

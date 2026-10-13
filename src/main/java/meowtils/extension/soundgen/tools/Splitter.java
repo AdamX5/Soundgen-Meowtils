@@ -106,6 +106,89 @@ public final class Splitter {
         return out;
     }
 
+    /**
+     * Continuous sound regions (e.g. whole drag-click runs or bursts): stretches above the
+     * "off" level, merging gaps shorter than {@code minSilenceMs}, keeping regions at least
+     * {@code minLengthMs} long. Each region gets a little lead-in and tail.
+     */
+    public static List<Slice> segments(float[] x, int rate, double thresholdDb, double minSilenceMs, double minLengthMs) {
+        List<Slice> out = new ArrayList<Slice>();
+        int win = Math.max(1, rate / 1000);
+        int blocks = (x.length + win - 1) / win;
+        if (blocks < 4) return out;
+        float[] env = new float[blocks];
+        float peak = 0;
+        for (int b = 0; b < blocks; b++) {
+            float m = 0;
+            for (int i = b * win, end = Math.min(x.length, i + win); i < end; i++) m = Math.max(m, Math.abs(x[i]));
+            env[b] = m;
+            peak = Math.max(peak, m);
+        }
+        if (peak <= 0) return out;
+        float[] sorted = env.clone();
+        Arrays.sort(sorted);
+        float noise = sorted[(int) (blocks * 0.2)];
+        float level = (float) Math.max(peak * Math.pow(10, -thresholdDb / 20), noise * 3.16);
+        int gap = (int) Math.max(1, minSilenceMs);
+        int start = -1, lastLoud = -1;
+        for (int b = 0; b <= blocks; b++) {
+            boolean loud = b < blocks && env[b] >= level;
+            if (loud) {
+                if (start < 0) start = b;
+                lastLoud = b;
+            } else if (start >= 0 && (b == blocks || b - lastLoud > gap)) {
+                if ((lastLoud - start + 1) >= minLengthMs) {
+                    int s0 = Math.max(0, start * win - frames(5, rate));
+                    int e0 = Math.min(x.length, (lastLoud + 1) * win + frames(20, rate));
+                    float pk = 0;
+                    for (int i = s0; i < e0; i++) pk = Math.max(pk, Math.abs(x[i]));
+                    out.add(new Slice(s0, start * win, e0, pk));
+                }
+                start = -1;
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Pairs press/release hits whose spacing isn't known in advance. Splits the gaps between
+     * consecutive hits into "short" (press -> release) and "long" (release -> next press) with
+     * Otsu's method, then pairs each hit with a following hit that is a short gap away.
+     * Returns, per hit, 0 = press, 1 = release, -1 = unpaired.
+     */
+    public static int[] pairByGaps(List<Slice> hits) {
+        int n = hits.size();
+        int[] role = new int[n];
+        Arrays.fill(role, -1);
+        if (n < 2) return role;
+        double[] gaps = new double[n - 1];
+        for (int i = 0; i < n - 1; i++) gaps[i] = hits.get(i + 1).onset - hits.get(i).onset;
+        double[] sorted = gaps.clone();
+        Arrays.sort(sorted);
+        double best = -1, split = sorted[sorted.length - 1];
+        for (int k = 1; k < sorted.length; k++) { // threshold between sorted[k-1] and sorted[k]
+            double m0 = 0, m1 = 0;
+            for (int i = 0; i < k; i++) m0 += sorted[i];
+            for (int i = k; i < sorted.length; i++) m1 += sorted[i];
+            m0 /= k;
+            m1 /= sorted.length - k;
+            double w0 = k / (double) sorted.length, w1 = 1 - w0;
+            double between = w0 * w1 * (m0 - m1) * (m0 - m1);
+            if (between > best) {
+                best = between;
+                split = (sorted[k - 1] + sorted[k]) / 2;
+            }
+        }
+        for (int i = 0; i < n - 1; i++) {
+            if (gaps[i] <= split) {
+                role[i] = 0;
+                role[i + 1] = 1;
+                i++;
+            }
+        }
+        return role;
+    }
+
     /** Copies a slice with a short fade-out so a cut tail never clicks. */
     public static float[] extract(float[] x, Slice s, int rate) {
         float[] d = Arrays.copyOfRange(x, s.start, s.end);

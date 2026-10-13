@@ -17,6 +17,11 @@ public enum Sound {
     /** Single right clicks in AUTO style (slow clicking); empty folder uses drag. */
     RIGHT_CLICK("right_click", DRAG, Placeholder.MOUSE, false),
     BUTTERFLY("butterfly", null, Placeholder.MOUSE, false),
+    /** A short drag-click burst (a few fast clicks with a natural end), for brief fast clicking. */
+    DRAG_BURST("drag_burst", null, Placeholder.BURST, false),
+    /** Mouse button press / release halves (stored for hold-style features). */
+    MOUSE_DOWN("mouse_down", null, Placeholder.MOUSE, false),
+    MOUSE_UP("mouse_up", null, Placeholder.KEY_UP, false),
 
     KEY_DOWN("key_down", null, Placeholder.KEY_DOWN, false),
     KEY_UP("key_up", null, Placeholder.KEY_UP, false),
@@ -42,7 +47,13 @@ public enum Sound {
     TAB_UP("tab_up", OTHER_UP, Placeholder.MOD_UP, false),
     /** 2u keys: Backspace and Enter. (Shift-size keys use shift_*, the space bar space_*.) */
     BACKSPACE_DOWN("backspace_down", OTHER_DOWN, Placeholder.WIDE_DOWN, false),
-    BACKSPACE_UP("backspace_up", OTHER_UP, Placeholder.WIDE_UP, false);
+    BACKSPACE_UP("backspace_up", OTHER_UP, Placeholder.WIDE_UP, false),
+    /** Taps: one combined press+release sound, used by the "Tap" release mode. */
+    KEY_TAP("key_tap", KEY_DOWN, Placeholder.KEY_DOWN, false),
+    SPACE_TAP("space_tap", SPACE_DOWN, Placeholder.SPACE_DOWN, false),
+    SHIFT_TAP("shift_tap", SHIFT_DOWN, Placeholder.MOD_DOWN, false),
+    TAB_TAP("tab_tap", TAB_DOWN, Placeholder.MOD_DOWN, false),
+    BACKSPACE_TAP("backspace_tap", BACKSPACE_DOWN, Placeholder.WIDE_DOWN, false);
 
     public final String folder;
     public final Sound fallback;

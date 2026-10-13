@@ -14,6 +14,8 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
  *              press (e.g. jump physics) fall back to SYNTHETIC automatically.
  * - SYNTHETIC: release sound a fixed time after the press, ignoring the real release.
  * - OFF:       press sounds only.
+ * - TAP:       one combined press+release recording (the *_tap slot) at the press, no
+ *              separate release.
  *
  * Methods are synchronized because packet events may arrive off the client thread; the
  * monitor is uncontended in practice.
@@ -22,11 +24,13 @@ public final class KeyChannel {
     public static final int RELEASE_REAL = 0;
     public static final int RELEASE_SYNTHETIC = 1;
     public static final int RELEASE_OFF = 2;
+    public static final int RELEASE_TAP = 3;
 
     private final AudioEngine engine;
     private final Timing timing;
     private final Sound down;
     private final Sound up;
+    private final Sound tap;
     private final boolean[] state;
     private final AtomicIntegerArray counts;
 
@@ -42,11 +46,12 @@ public final class KeyChannel {
     private boolean releasePending;
     private long lastPressAt;
 
-    public KeyChannel(AudioEngine engine, Timing timing, Sound down, Sound up, int sources) {
+    public KeyChannel(AudioEngine engine, Timing timing, Sound down, Sound up, Sound tap, int sources) {
         this.engine = engine;
         this.timing = timing;
         this.down = down;
         this.up = up;
+        this.tap = tap;
         this.state = new boolean[sources];
         this.counts = new AtomicIntegerArray(sources);
     }
@@ -83,8 +88,13 @@ public final class KeyChannel {
     private void press(long now, boolean cannotSeeRelease) {
         long at = now + timing.keyJitter();
         lastPressAt = at;
-        engine.play(down, gain, at);
         int mode = releaseMode;
+        if (mode == RELEASE_TAP) {
+            engine.play(tap, gain, at);
+            releasePending = false;
+            return;
+        }
+        engine.play(down, gain, at);
         if (mode == RELEASE_SYNTHETIC || (mode == RELEASE_REAL && cannotSeeRelease)) {
             long hold = (long) (syntheticReleaseMs * (0.8 + 0.4 * Timing.unit()) * 1_000_000.0);
             engine.play(up, gain, at + Math.max(hold, minHoldMs * 1_000_000L));

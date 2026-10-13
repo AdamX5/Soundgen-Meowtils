@@ -167,7 +167,9 @@ Ask the user for a Debug Readout line while butterfly clicking at full speed.
 
 1. Install 0.3.0 (`build.bat --install`, or the release zip) and re-test the inventory and key-size points above.
 2. **Recording pack v1 has started** (user's call): GUIDE Part 4. The user records **two packs**, `close` (mic near the keyboard) and `far` (mic in its talking position, sounds in the background). They use `import-sounds.bat` (0.4.0) to cut the takes. Advised to record in Audacity (WAV, mono, 48 kHz) rather than OBS.
-   - **Planned feature:** a quick way to switch close/far in game (a dropdown or hotkey instead of typing the Sound Pack name), and possibly blending the two.
+   - **Update:** the user dropped close/far ("too much work") and recorded one set, as **named files** (`quick-*`, `press_unpress-*`, `drag_click-long|medium|short`). The recordings are very quiet (peaks about −48 dBFS, otherwise silent). 0.5.0 imports this layout directly into `packs\default`, with one shared gain. **Not yet run on the real files:** check the import report the user pastes (hit counts per file, odd-count warnings).
+   - `mouse_down`/`mouse_up` are imported but not used yet. Idea: play them when a held-state source (Keybind/Raw) sees a long hold (blocking, eating, mining).
+   - Taps vs press/release for keys: the user has both. Tap mode is a per-key Release option; test which sounds better per key (e.g. Tap for hotbar/chat, Real for WASD).
 3. Work through GUIDE Part 3 with the Debug Readout (fast place, butterfly, legit scaffold, sprint reset, jumping, knockback). Pick default read methods from the results and set them in `SoundGen.java`.
 
 ### Then

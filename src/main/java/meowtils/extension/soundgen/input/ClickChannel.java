@@ -17,7 +17,9 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
  *           when they stop (or immediately on release, for held-state sources).
  * - AUTO:   single-click sounds while clicking slowly; switches to the LOOP rattle once the
  *           click rate passes the drag threshold (fast place, drag clicking), and back again
- *           when it stops.
+ *           when it stops. With bursts on, a short spell of fast clicking plays one
+ *           drag_burst recording (which ends naturally); only if the fast clicking outlasts
+ *           the burst window does the continuous rattle take over.
  *
  * Choke: each new click fades out the previous click's tail, so very fast clicking stays
  * crisp instead of piling up into a smear.
@@ -52,12 +54,18 @@ public final class ClickChannel {
     public volatile boolean choke = true;
     /** How long a rattle takes to fade out after the clicking stops (no hard cut). */
     public volatile int loopFadeMs = 20;
+    /** AUTO: play a drag_burst first (natural end) before committing to the loop. */
+    public volatile boolean bursts = true;
+    public volatile int burstWindowMs = 350;
     /** AUTO switches to the rattle at or above this many clicks per second. */
     public volatile int dragThresholdCps = 8;
 
     private final AtomicInteger pending = new AtomicInteger();
     private final AtomicInteger pendingSingle = new AtomicInteger();
     private final AtomicBoolean looping = new AtomicBoolean();
+    private final AtomicBoolean bursting = new AtomicBoolean();
+    private volatile long burstStart;
+    private volatile Sound burst;
     private volatile long lastActivity;
     private final long[] history = new long[HISTORY]; // guarded by itself
     private int historyPos;
@@ -95,7 +103,19 @@ public final class ClickChannel {
         } else if (s == STYLE_AUTO) {
             lastActivity = now;
             if (rateAtLeast(now, dragThresholdCps)) {
-                startLoop(now);
+                Sound b = burst;
+                if (looping.get()) {
+                    // already rattling
+                } else if (b != null && bursts) {
+                    if (bursting.compareAndSet(false, true)) {
+                        burstStart = now;
+                        engine.play(b, gain, now, chokeGroup());
+                    } else if (now - burstStart >= burstWindowMs * 1_000_000L) {
+                        startLoop(now);
+                    }
+                } else {
+                    startLoop(now);
+                }
             } else if (!looping.get()) {
                 hit(single, pendingSingle, source, now);
             }
@@ -127,6 +147,11 @@ public final class ClickChannel {
         if (looping.compareAndSet(false, true)) engine.loopStart(loop, tag, gain, now);
     }
 
+    /** Sound for AUTO's short bursts (null = no bursts). Call during setup. */
+    public void setBurst(Sound sound) {
+        burst = sound;
+    }
+
     private int chokeGroup() {
         return choke ? tag : 0;
     }
@@ -154,9 +179,11 @@ public final class ClickChannel {
     public void tick(long now) {
         flush(click, pending, now);
         flush(single, pendingSingle, now);
-        if (looping.get() && (style == STYLE_CLICKS || !enabled || now - lastActivity > holdTimeoutMs * 1_000_000L)) {
+        boolean idle = now - lastActivity > holdTimeoutMs * 1_000_000L;
+        if (looping.get() && (style == STYLE_CLICKS || !enabled || idle)) {
             stopLoop(now);
         }
+        if (bursting.get() && idle && !looping.get()) bursting.set(false);
     }
 
     /**
@@ -172,6 +199,7 @@ public final class ClickChannel {
     }
 
     public void stopLoop(long now) {
+        bursting.set(false);
         if (looping.compareAndSet(true, false)) {
             engine.loopStop(tag, loopFadeMs, now);
             if (endClick) engine.play(end, gain, now, chokeGroup());
@@ -186,6 +214,7 @@ public final class ClickChannel {
         pending.set(0);
         pendingSingle.set(0);
         looping.set(false);
+        bursting.set(false);
         java.util.Arrays.fill(held, false);
         synchronized (history) {
             java.util.Arrays.fill(history, Long.MIN_VALUE);

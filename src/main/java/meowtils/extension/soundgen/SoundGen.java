@@ -80,8 +80,8 @@ public class SoundGen extends Extension {
     static final List<String> INV_METHODS = Arrays.asList("Raw Mouse", "Slot Click");
     static final int INV_RAW = 0, INV_SLOT = 1;
     private static final boolean[] INV_TICK_BOUND = {false, false};
-    static final List<String> OTHER_RELEASE = Arrays.asList("Real", "Off");
-    static final List<String> RELEASE_MODES = Arrays.asList("Real", "Synthetic", "Off");
+    static final List<String> OTHER_RELEASE = Arrays.asList("Real", "Off", "Tap");
+    static final List<String> RELEASE_MODES = Arrays.asList("Real", "Synthetic", "Off", "Tap");
     static final List<String> TIMING_MODES = Arrays.asList("Spread", "Instant");
     static final List<String> SELECTION_MODES = Arrays.asList("Shuffle", "Random");
 
@@ -103,7 +103,7 @@ public class SoundGen extends Extension {
     @Config public String soundPack = "default";
     @Config public String selection = "Shuffle";
     @Config public boolean autoTrim = true;
-    @Config public boolean matchLevels = true;
+    @Config public boolean matchLevels = false; // off: keeps the intensity differences recorded on purpose
 
     @Config public String timingMode = "Spread";
     @Config public int clickJitterMs = 3;
@@ -118,6 +118,8 @@ public class SoundGen extends Extension {
     @Config public int rightDragThreshold = 8;
     @Config public boolean rightChoke = true;
     @Config public int dragReleaseFadeMs = 20;
+    @Config public boolean dragBursts = true;
+    @Config public int burstWindowMs = 350;
     @Config public int rightVolume = 100;
     @Config public int rightHoldTimeoutMs = 120;
     @Config public boolean rightEndClick = true;
@@ -176,13 +178,13 @@ public class SoundGen extends Extension {
     private final KeyboardChannel otherKeys = new KeyboardChannel(engine, timing, Sound.OTHER_DOWN, Sound.OTHER_UP);
     /** Key codes owned by other channels this frame (so Other Keys skips them). */
     private final int[] handledKeys = new int[9];
-    private final KeyChannel w = new KeyChannel(engine, timing, Sound.W_DOWN, Sound.W_UP, MOVE_METHODS.size());
-    private final KeyChannel a = new KeyChannel(engine, timing, Sound.A_DOWN, Sound.A_UP, MOVE_METHODS.size());
-    private final KeyChannel s = new KeyChannel(engine, timing, Sound.S_DOWN, Sound.S_UP, MOVE_METHODS.size());
-    private final KeyChannel d = new KeyChannel(engine, timing, Sound.D_DOWN, Sound.D_UP, MOVE_METHODS.size());
-    private final KeyChannel space = new KeyChannel(engine, timing, Sound.SPACE_DOWN, Sound.SPACE_UP, JUMP_METHODS.size());
-    private final KeyChannel shift = new KeyChannel(engine, timing, Sound.SHIFT_DOWN, Sound.SHIFT_UP, SNEAK_METHODS.size());
-    private final KeyChannel sprint = new KeyChannel(engine, timing, Sound.SPRINT_DOWN, Sound.SPRINT_UP, SPRINT_METHODS.size());
+    private final KeyChannel w = new KeyChannel(engine, timing, Sound.W_DOWN, Sound.W_UP, Sound.KEY_TAP, MOVE_METHODS.size());
+    private final KeyChannel a = new KeyChannel(engine, timing, Sound.A_DOWN, Sound.A_UP, Sound.KEY_TAP, MOVE_METHODS.size());
+    private final KeyChannel s = new KeyChannel(engine, timing, Sound.S_DOWN, Sound.S_UP, Sound.KEY_TAP, MOVE_METHODS.size());
+    private final KeyChannel d = new KeyChannel(engine, timing, Sound.D_DOWN, Sound.D_UP, Sound.KEY_TAP, MOVE_METHODS.size());
+    private final KeyChannel space = new KeyChannel(engine, timing, Sound.SPACE_DOWN, Sound.SPACE_UP, Sound.SPACE_TAP, JUMP_METHODS.size());
+    private final KeyChannel shift = new KeyChannel(engine, timing, Sound.SHIFT_DOWN, Sound.SHIFT_UP, Sound.SHIFT_TAP, SNEAK_METHODS.size());
+    private final KeyChannel sprint = new KeyChannel(engine, timing, Sound.SPRINT_DOWN, Sound.SPRINT_UP, Sound.KEY_TAP, SPRINT_METHODS.size());
     private final KeyChannel[] keyChannels = {w, a, s, d, space, shift, sprint};
 
     private final Queue<String> messages = new ConcurrentLinkedQueue<String>();
@@ -194,6 +196,8 @@ public class SoundGen extends Extension {
         super("SoundGen", "Action-driven click & key ASMR");
 
         otherKeys.applyKeySizes();
+        right.setBurst(Sound.DRAG_BURST);
+        invRight.setBurst(Sound.DRAG_BURST);
 
         slider("Master Volume", 0, 200, 5, "%", "masterVolume", int.class);
         check("Debug Readout", "debug");
@@ -230,6 +234,8 @@ public class SoundGen extends Extension {
             e.slider("Drag Threshold", 3, 20, 1, "CPS", "rightDragThreshold", int.class);
             e.check("Right Choke", "rightChoke");
             e.slider("Drag Release Fade", 5, 80, 1, "ms", "dragReleaseFadeMs", int.class);
+            e.check("Drag Bursts", "dragBursts");
+            e.slider("Burst Window", 100, 1000, 25, "ms", "burstWindowMs", int.class);
             e.slider("Right Volume", 0, 200, 5, "%", "rightVolume", int.class);
             e.slider("Loop Hold Timeout", 60, 300, 5, "ms", "rightHoldTimeoutMs", int.class);
             e.check("Loop End Click", "rightEndClick");
@@ -379,6 +385,8 @@ public class SoundGen extends Extension {
         right.dragThresholdCps = rightDragThreshold;
         right.choke = rightChoke;
         right.loopFadeMs = dragReleaseFadeMs;
+        right.bursts = dragBursts;
+        right.burstWindowMs = burstWindowMs;
 
         int inv = index(INV_METHODS, invMethod);
         invLeft.enabled = invEnabled;
@@ -395,6 +403,8 @@ public class SoundGen extends Extension {
         invRight.holdTimeoutMs = rightHoldTimeoutMs;
         invRight.endClick = rightEndClick;
         invRight.loopFadeMs = dragReleaseFadeMs;
+        invRight.bursts = dragBursts;
+        invRight.burstWindowMs = burstWindowMs;
 
         left.enabled = leftEnabled;
         left.method = index(LEFT_METHODS, leftMethod);
@@ -403,7 +413,9 @@ public class SoundGen extends Extension {
         left.choke = leftChoke;
 
         otherKeys.enabled = otherEnabled;
-        otherKeys.release = index(OTHER_RELEASE, otherRelease) == 0;
+        int otherMode = index(OTHER_RELEASE, otherRelease);
+        otherKeys.release = otherMode == 0;
+        otherKeys.tap = otherMode == 2;
         otherKeys.gain = keysVolume / 100f;
         otherKeys.minHoldMs = minHoldMs;
 

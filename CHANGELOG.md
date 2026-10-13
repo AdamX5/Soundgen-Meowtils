@@ -3,6 +3,29 @@
 Each `## <version>` section becomes the GitHub release notes when that version is published
 (see `.github/workflows/build.yml`). Newest first.
 
+## 0.5.0
+
+Built around the user's first real recordings:
+
+- **Named-file import**: drop takes like `quick-small_keys.wav`, `press_unpress-space_key.wav`,
+  `drag_click-long.wav` straight into `soundgen\recordings\` and double-click
+  `import-sounds.bat`; they're cut and sorted into `packs\default`.
+  - press/release files: hits alternate press, release (even count); odd counts fall back to
+    timing-based pairing.
+  - quick (tap) files: each tap keeps its own release inside it.
+  - drag_click-long/medium: each run (separated by silence) becomes a `drag_loop` take;
+    drag_click-short: each burst becomes a `drag_burst`.
+- **Quiet recordings**: one shared gain per pack (loudest hit -> -1 dB, saved in gain.txt),
+  so relative levels between keys and intensities are kept.
+- **Tap release mode** (W/A/S/D/Space/Shift/Sprint and Other Keys): one combined `*_tap`
+  recording per press. New slots `key_tap`, `space_tap`, `shift_tap`, `tab_tap`, `backspace_tap`.
+- **Drag bursts** (Right Click, on by default): in Auto style, a short spell of fast clicking
+  plays a `drag_burst` with a natural ending; the loop only takes over past Burst Window.
+- New slots `mouse_down` / `mouse_up` (stored for a later hold feature).
+- Match Levels now defaults to off (keeps recorded intensity differences). Existing configs
+  keep their saved value: switch it off in Sounds.
+- The install package no longer creates close/far folders.
+
 ## 0.4.0
 
 Recording workflow (no command line needed):

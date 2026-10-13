@@ -1,22 +1,26 @@
 SoundGen recordings
 ===================
 
-Put your raw takes (long recordings with many clicks/presses) here, one folder per sound:
+Drop your WAV takes straight into this folder and double-click import-sounds.bat (one folder
+up). Every NEW take is cut up and sorted into packs\default\..., then a report is printed.
+Add more takes any time and run it again; files already imported are listed in imported.txt.
 
-  recordings\close\butterfly\take1.wav      <- many separate left clicks
-  recordings\close\right_click\take1.wav    <- many separate right clicks
-  recordings\close\drag_loop\run1.wav       <- ONE continuous drag-click run per file (3-6 s)
-  recordings\close\drag_end\take1.wav       <- "stop dragging and lift off", many times
-  recordings\close\key\take1.wav            <- normal keys: press, hold ~0.2 s, release, pause 0.6 s
-  recordings\close\space\take1.wav          <- space bar, same rhythm
-  recordings\close\shift\take1.wav          <- Shift / Caps Lock, same rhythm
-  recordings\close\tab\take1.wav            <- Tab / Backslash, same rhythm
-  recordings\close\backspace\take1.wav      <- Backspace / Enter, same rhythm
+File names tell the importer what's inside:
 
-"close" and "far" are two packs (mic near the keyboard / mic where it sits when you talk).
-Any folder name you create here becomes a pack with the same name.
+  quick-<sound>.wav           quick taps/clicks: press and release in one go (any intensity)
+  press_unpress-<sound>.wav   press, release, press, release... (starts with a press, even count)
+  drag_click-long.wav         drag-click runs, separated by silence   -> drag_loop
+  drag_click-medium.wav       (same)                                  -> drag_loop
+  drag_click-short.wav        short drag bursts, separated by silence -> drag_burst
 
-Then double-click import-sounds.bat (one folder up). It cuts every NEW take into
-packs\<pack>\... and prints a report. Add more takes any time and run it again.
+  <sound> = small_keys (normal keys), space_key, shift_key, tab_key, backspace_key, click (mouse)
 
-Format: WAV, 48000 Hz, mono, 24-bit or 32-bit float (Audacity: see the guide).
+Examples: quick-small_keys.wav, press_unpress-tab_key.wav, quick-click.wav
+Add a number for more takes of the same thing: quick-click-2.wav
+
+Quiet recordings are fine: the first import picks one gain for the whole pack (loudest hit ->
+-1 dB) and saves it in gain.txt, so later takes get the same boost and every level stays
+relative (space louder than small keys, soft hits softer). Delete gain.txt to recalculate.
+
+To undo an import: delete the new files in packs\default\<folder> and remove the take's line
+from imported.txt.

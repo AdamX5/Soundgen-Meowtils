@@ -44,6 +44,10 @@ public final class EngineSelfTest {
         keySizesUseTheirOwnSlots();
         fallbackFollowsTheChain();
         importSortsTakesIntoThePack();
+        namedFilesMapToTheRightSlots();
+        importFilesHandlesQuietNamedTakes();
+        tapModePlaysOneSound();
+        autoPlaysBurstBeforeLoop();
         cpuCost();
         System.out.println(failures == 0 ? "ALL PASSED" : failures + " FAILED");
         if (failures > 0) System.exit(1);
@@ -145,7 +149,7 @@ public final class EngineSelfTest {
         AudioEngine e = engineWithImpulse(Sound.KEY_DOWN, Sound.KEY_UP);
         Timing timing = new Timing();
         timing.keyJitterMs = 0;
-        KeyChannel k = new KeyChannel(e, timing, Sound.KEY_DOWN, Sound.KEY_UP, 2);
+        KeyChannel k = new KeyChannel(e, timing, Sound.KEY_DOWN, Sound.KEY_UP, Sound.KEY_TAP, 2);
         k.minHoldMs = 30;
         k.state(0, true, 0);
         k.state(0, false, ms(5)); // 5 ms tap must still release 30 ms after the press
@@ -392,6 +396,137 @@ public final class EngineSelfTest {
                 && !new File(pack, "drag_loop/drag_loop_002.wav").exists());
         WavDecoder.Decoded loop = WavDecoder.decode(new File(pack, "drag_loop/drag_loop_001.wav"));
         check("import: loop edges trimmed (2.6 s of 3 s)", Math.abs(loop.mono.length - 48000 * 2.6) < 10);
+    }
+
+    private static void namedFilesMapToTheRightSlots() {
+        String[][] cases = {
+                {"quick-small_keys.wav", "quick", "key_tap", null},
+                {"press_unpress-small_keys.wav", "pair", "key_down", "key_up"},
+                {"quick-space_key.wav", "quick", "space_tap", null},
+                {"press_unpress-space_key.wav", "pair", "space_down", "space_up"},
+                {"quick-shift_key.wav", "quick", "shift_tap", null},
+                {"press_unpress-shift_key.wav", "pair", "shift_down", "shift_up"},
+                {"quick-tab_key.wav", "quick", "tab_tap", null},
+                {"press_unpress-tab_key.wav", "pair", "tab_down", "tab_up"},
+                {"quick-backspace_key.wav", "quick", "backspace_tap", null},
+                {"press_unpress-backspace_key.wav", "pair", "backspace_down", "backspace_up"},
+                {"drag_click-long.wav", "run", "drag_loop", null},
+                {"drag_click-medium.wav", "run", "drag_loop", null},
+                {"drag_click-short.wav", "burst", "drag_burst", null},
+                {"quick-click.wav", "quick", "butterfly", null},
+                {"press_unpress-click.wav", "pair", "mouse_down", "mouse_up"},
+        };
+        boolean ok = true;
+        String bad = "";
+        for (String[] c : cases) {
+            String got = meowtils.extension.soundgen.tools.SoundTool.describePlan(new File(c[0]));
+            String want = c[1] + " " + c[2] + (c[3] == null ? "" : " " + c[3]);
+            if (!got.startsWith(want)) {
+                ok = false;
+                bad += " " + c[0] + "=" + got;
+            }
+        }
+        check("all 15 of the user's file names map to the right slots" + bad, ok);
+    }
+
+    private static void importFilesHandlesQuietNamedTakes() throws IOException {
+        File root = Files.createTempDirectory("sgnamed").toFile();
+        File rec = new File(root, "recordings"), pack = new File(root, "packs/default");
+        rec.mkdirs();
+        float q = 0.004f; // about -48 dBFS
+        java.util.Random r = new java.util.Random(9);
+        // 10 taps: press transient + quieter release 45 ms later, 400 ms apart, varied intensity
+        float[] taps = new float[48000 * 5];
+        for (int k = 0; k < 10; k++) {
+            int t = 4800 + k * 19200;
+            float amp = q * (0.4f + 0.6f * r.nextFloat());
+            for (int i = 0; i < 600; i++) taps[t + i] += amp * (float) (Math.exp(-i / 70.0) * Math.sin(i * 0.9));
+            for (int i = 0; i < 600; i++) taps[t + 2160 + i] += amp * 0.4f * (float) (Math.exp(-i / 70.0) * Math.sin(i * 1.2));
+        }
+        writeWav(new File(rec, "quick-small_keys.wav"), taps, 48000, 1, 3, 32, true);
+        // 6 press/release pairs, perfectly uniform spacing (300 ms), so timing can't tell them apart
+        float[] pairs = new float[48000 * 5];
+        for (int k = 0; k < 12; k++) {
+            int t = 4800 + k * 14400;
+            float amp = q * (k % 2 == 0 ? 1f : 0.35f);
+            for (int i = 0; i < 600; i++) pairs[t + i] += amp * (float) (Math.exp(-i / 70.0) * Math.sin(i * 0.9));
+        }
+        writeWav(new File(rec, "press_unpress-space_key.wav"), pairs, 48000, 1, 3, 32, true);
+        // 2 drag runs of 2 s with ~25 CPS clicks, 1 s silence between
+        float[] runs = new float[48000 * 6];
+        for (int run = 0; run < 2; run++) {
+            for (int t = 4800 + run * 144000; t < 4800 + run * 144000 + 96000; t += 1700 + r.nextInt(600)) {
+                for (int i = 0; i < 300; i++) runs[t + i] += q * (float) (Math.exp(-i / 40.0) * Math.sin(i * 1.4));
+            }
+        }
+        writeWav(new File(rec, "drag_click-long.wav"), runs, 48000, 1, 3, 32, true);
+        // 3 bursts of 5 clicks (60 ms apart), 700 ms apart
+        float[] bursts = new float[48000 * 3];
+        for (int b = 0; b < 3; b++) {
+            for (int c = 0; c < 5; c++) {
+                int t = 4800 + b * 33600 + c * 2880;
+                for (int i = 0; i < 300; i++) bursts[t + i] += q * (float) (Math.exp(-i / 40.0) * Math.sin(i * 1.4));
+            }
+        }
+        writeWav(new File(rec, "drag_click-short.wav"), bursts, 48000, 1, 3, 32, true);
+        writeWav(new File(rec, "random-name.wav"), bursts, 48000, 1, 3, 32, true);
+
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"import-files", rec.getPath(), pack.getPath()});
+        check("quiet taps: 10 taps, each keeping its own release",
+                count(new File(pack, "key_tap")) == 10);
+        check("uniform press/release: 6 presses and 6 releases, presses louder",
+                count(new File(pack, "space_down")) == 6 && count(new File(pack, "space_up")) == 6
+                        && peakOf(new File(pack, "space_down/space_down_001.wav")) > 2 * peakOf(new File(pack, "space_up/space_up_001.wav")));
+        check("drag runs: 2 loop takes", count(new File(pack, "drag_loop")) == 2);
+        check("bursts: 3 burst one-shots", count(new File(pack, "drag_burst")) == 3);
+        float loudest = 0;
+        for (String d : new String[]{"key_tap", "space_down", "drag_loop", "drag_burst"}) {
+            for (File f : new File(pack, d).listFiles()) loudest = Math.max(loudest, peakOf(f));
+        }
+        check("shared gain lifts the loudest hit to about -1 dB (" + loudest + ")", loudest > 0.8f && loudest <= 0.9f);
+        meowtils.extension.soundgen.tools.SoundTool.main(new String[]{"import-files", rec.getPath(), pack.getPath()});
+        check("named import: running again adds nothing", count(new File(pack, "key_tap")) == 10);
+    }
+
+    private static int count(File dir) {
+        File[] f = dir.listFiles((d, n) -> n.endsWith(".wav"));
+        return f == null ? 0 : f.length;
+    }
+
+    private static float peakOf(File wav) {
+        try {
+            return SampleBank.peak(WavDecoder.decode(wav).mono);
+        } catch (IOException e) {
+            return -1;
+        }
+    }
+
+    private static void tapModePlaysOneSound() {
+        AudioEngine e = engineWithImpulse(Sound.KEY_DOWN, Sound.KEY_UP, Sound.KEY_TAP);
+        Timing timing = new Timing();
+        timing.keyJitterMs = 0;
+        KeyChannel k = new KeyChannel(e, timing, Sound.KEY_DOWN, Sound.KEY_UP, Sound.KEY_TAP, 1);
+        k.releaseMode = KeyChannel.RELEASE_TAP;
+        k.state(0, true, 0);
+        k.state(0, false, ms(100));
+        check("tap mode: one sound per press, no release", onsets(render(e, 9600)).size() == 1);
+    }
+
+    private static void autoPlaysBurstBeforeLoop() {
+        AudioEngine e = engineWithImpulse(Sound.RIGHT_CLICK, Sound.DRAG_BURST);
+        Timing timing = new Timing();
+        timing.spread = false;
+        timing.clickJitterMs = 0;
+        ClickChannel c = new ClickChannel(e, timing, Sound.DRAG, Sound.RIGHT_CLICK, Sound.DRAG_LOOP, Sound.DRAG_END, 1,
+                new boolean[]{true});
+        c.style = ClickChannel.STYLE_AUTO;
+        c.setBurst(Sound.DRAG_BURST);
+        c.burstWindowMs = 350;
+        c.endClick = false;
+        for (int k = 0; k < 5; k++) c.click(0, k * ms(50)); // 250 ms of 20 CPS: a short burst
+        check("auto: short fast clicking plays a burst, not the loop", !c.isLooping());
+        for (int k = 5; k < 12; k++) c.click(0, k * ms(50)); // keeps going past the window
+        check("auto: clicking past the burst window starts the loop", c.isLooping());
     }
 
     private static void cpuCost() {
