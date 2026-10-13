@@ -1,0 +1,42 @@
+/*
+Same ForgeGradle setup as the reference Meowtils extensions (Forge 1.8.9, Java 8).
+The output is a .meowtils file; drop it into the Meowtils extensions folder.
+ */
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+            name = "forge"
+            url = 'https://maven.minecraftforge.net/'
+        }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT'
+    }
+}
+apply plugin: 'net.minecraftforge.gradle.forge'
+
+version = "0.1.0"
+archivesBaseName = "SoundGen"
+group = "meowtils.extension"
+
+jar {
+    extension = "meowtils"
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+minecraft {
+    version = "1.8.9-11.15.1.2318-1.8.9"
+    mappings = "stable_22"
+    makeObfSourceJar = false
+}
+
+/*
+Put the Meowtils jar at libs/meowtils.jar (download from github.com/femboytatp/meowtils/releases).
+It is compile-only: Meowtils provides it at runtime.
+ */
+dependencies {
+    compileOnly files('libs/meowtils.jar')
+}
