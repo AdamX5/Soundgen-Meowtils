@@ -66,8 +66,8 @@ public final class SampleBank {
         int placeholders = 0;
         for (Sound sound : Sound.values()) {
             Sample[] samples = own[sound.ordinal()];
-            if (samples.length == 0 && sound.fallback != null) {
-                samples = own[sound.fallback.ordinal()];
+            for (Sound f = sound.fallback; samples.length == 0 && f != null; f = f.fallback) {
+                samples = own[f.ordinal()];
             }
             if (samples.length > 0) {
                 sets[sound.ordinal()] = new SampleSet(samples, false);
@@ -239,7 +239,9 @@ public final class SampleBank {
             w.println("key_down / key_up. drag_end and right_click use drag. Slots with nothing at all use a");
             w.println("synthesised placeholder.");
             w.println("right_click = single right clicks (Right Style Auto, slow clicking).");
-            w.println("other_down / other_up = every other key: hotbar, Esc, chat typing...");
+            w.println("Key sizes: key_* = normal keys, tab_* = Tab + Backslash, shift_* = Shifts + Caps Lock,");
+            w.println("backspace_* = Backspace + Enter, space_* = space bar. other_* overrides key_* for keys");
+            w.println("outside the movement/jump/sneak/sprint binds (hotbar, Esc, chat typing...).");
             w.println();
             w.println("After adding files press 'Reload Sounds' in the module settings (Sounds section).");
         } catch (IOException e) {

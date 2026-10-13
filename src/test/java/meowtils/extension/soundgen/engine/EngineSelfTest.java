@@ -41,6 +41,8 @@ public final class EngineSelfTest {
         chokeCutsPreviousTail();
         autoStyleSwitchesToRattleWhenFast();
         otherKeysSkipHandledAndPairRelease();
+        keySizesUseTheirOwnSlots();
+        fallbackFollowsTheChain();
         cpuCost();
         System.out.println(failures == 0 ? "ALL PASSED" : failures + " FAILED");
         if (failures > 0) System.exit(1);
@@ -323,6 +325,35 @@ public final class EngineSelfTest {
         List<Integer> on = onsets(render(e, 24000));
         check("other keys: F press+release only, got " + on, on.size() == 2 && on.get(0) == 0 && on.get(1) == 4800);
         check("other keys: one press counted", k.takePresses() == 1);
+    }
+
+    private static void keySizesUseTheirOwnSlots() {
+        AudioEngine e = engineWithImpulse(Sound.TAB_DOWN, Sound.SPACE_DOWN, Sound.BACKSPACE_DOWN);
+        Timing timing = new Timing();
+        timing.keyJitterMs = 0;
+        meowtils.extension.soundgen.input.KeyboardChannel k =
+                new meowtils.extension.soundgen.input.KeyboardChannel(e, timing, Sound.OTHER_DOWN, Sound.OTHER_UP);
+        k.release = false;
+        k.applyKeySizes();
+        k.update(15, true, true, false, 0);          // Tab -> tab_down (loaded)
+        k.update(57, true, true, false, ms(20));     // Space -> space_down (loaded)
+        k.update(28, true, true, false, ms(40));     // Enter -> backspace_down (loaded)
+        k.update(30, true, true, false, ms(60));     // A -> other_down (not loaded here: silent)
+        List<Integer> on = onsets(render(e, 4800));
+        check("key sizes: Tab, Space, Enter use their own slots, got " + on,
+                on.size() == 3 && on.get(0) == 0 && on.get(1) == 960 && on.get(2) == 1920);
+    }
+
+    private static void fallbackFollowsTheChain() throws IOException {
+        File pack = Files.createTempDirectory("sgchain").toFile();
+        SampleBank.ensureLayout(pack, new ArrayList<String>());
+        float[] hit = new float[480];
+        for (int i = 0; i < hit.length; i++) hit[i] = (float) (0.5 * Math.exp(-i / 60.0) * Math.sin(i * 0.8));
+        writeWav(new File(pack, "key_down/k1.wav"), hit, 48000, 1, 1, 16, false);
+        SampleBank.Result r = SampleBank.load(pack, true, true);
+        check("tab_down -> other_down -> key_down uses the key_down recording",
+                !r.sets[Sound.TAB_DOWN.ordinal()].placeholder && !r.sets[Sound.OTHER_DOWN.ordinal()].placeholder
+                        && r.sets[Sound.TAB_UP.ordinal()].placeholder);
     }
 
     private static void cpuCost() {

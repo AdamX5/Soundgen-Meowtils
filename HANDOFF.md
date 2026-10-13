@@ -111,7 +111,8 @@ The output can go to a virtual audio cable, so it can be recorded in OBS next to
 | Engine timing, loops, voice limit, WAV formats, trim, splitter, pairing, shuffle | **Verified** (self-test) |
 | SRG name translation of the built file | **Verified** (round-trip through Meowtils' own table) |
 | The extension loads and runs inside Lunar | **Verified** by the user (0.1.1): module appears, Test Sounds plays, output device switching works |
-| Choke, Auto right click, Other Keys, button size (0.2.0) | **Verified offline** (self-test, 36 checks); **open** in game |
+| Choke, Auto right click, Other Keys, button size (0.2.0) | **Verified** in game by the user ("every key press registered", responsive) |
+| Inventory clicks, key sizes, drag release fade (0.3.0) | **Verified offline** (self-test); **open** in game |
 | Lunar's game directory is `%APPDATA%\.minecraft` | **Verified** on the user's PC: `C:\Users\Adam\AppData\Roaming\.minecraft\meowtils\` holds meowtils.json, meowtils.log, extensions\ |
 | User runs Meowtils 2.0.1 on Lunar via `%APPDATA%\lunarclient\Meowtils-Lunar\` (Meowtils.jar + lunar-agent.jar) | **Verified** (user screenshot; jar size matches 2.0.1). That folder is the mod loader, not where extensions go |
 | Meowtils' hooks behave the same on Lunar as on Forge | **Inferred** (Meowtils advertises Lunar support) |
@@ -146,6 +147,15 @@ The user tested 0.1.1 and is happy with it overall. Their feedback, and what 0.2
 | Output buttons: text too small to read | Button size changed to 5.0, the value every Meowtils module uses (checked in the jar) | Built, not re-tested |
 | Wants to work directly in the live meowtils folder | `build.bat --install` plus `/add-dir` of the live folder (see CLAUDE.md) | Built |
 
+**Second test (0.2.0):** "really nice and polished, super responsive, every key press registered". Placeholders were too sharp (softened in 0.3.0). Legit telebridge: key presses perfect; right-click sounded like one long press (expected with the placeholder rattle, so it needs re-judging with real `drag_loop` recordings).
+
+| Feedback (0.2.0) | 0.3.0 response | Status |
+|---|---|---|
+| Inventory clicks (shift-click etc.) made no sound | Inventory Clicks: Raw Mouse in any menu (default) or Slot Click (`SlotClickEvent`, hotbar/drop skipped); right = Auto | Built, not re-tested |
+| Right-click half a stack must be a single click, not a drag; held/fast → drag sound | invRight uses Auto (single below Drag Threshold, rattle above) | Built, not re-tested |
+| Releasing a drag mustn't cut off harshly | Drag Release Fade (default 20 ms) + optional `drag_end` | Built; judge with real recordings |
+| Bigger keys need their own sounds (75% ANSI) | `tab_*` (Tab, \\), `shift_*` (Shifts, Caps), `backspace_*` (Backspace, Enter), `space_*`; rest 1u; chained fallbacks | Built, not re-tested. **Assumed:** Enter = Backspace size, left Ctrl/Win/Alt = 1u. Fn can't be detected |
+
 **Butterfly not keeping up: possible causes, not yet distinguished.**
 1. Overlapping tails smearing at high CPS. Choke addresses this.
 2. Spread timing adds up to 50 ms and evens clicks out, which can feel laggy. Try Click Timing = Instant.
@@ -155,8 +165,9 @@ Ask the user for a Debug Readout line while butterfly clicking at full speed.
 
 ### Next
 
-1. Install 0.2.0 (`build.bat --install`, or the release zip) and re-test the four points above.
-2. Work through GUIDE Part 3 with the Debug Readout (fast place, butterfly, legit scaffold, sprint reset, jumping, knockback). Pick default read methods from the results and set them in `SoundGen.java`.
+1. Install 0.3.0 (`build.bat --install`, or the release zip) and re-test the inventory and key-size points above.
+2. **Recording pack v1 has started** (user's call): GUIDE Part 4, "What to record first".
+3. Work through GUIDE Part 3 with the Debug Readout (fast place, butterfly, legit scaffold, sprint reset, jumping, knockback). Pick default read methods from the results and set them in `SoundGen.java`.
 
 ### Then
 

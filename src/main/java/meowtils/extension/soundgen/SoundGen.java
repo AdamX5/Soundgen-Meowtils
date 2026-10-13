@@ -26,6 +26,7 @@ import wtf.tatp.meowtils.event.MouseInputEvent;
 import wtf.tatp.meowtils.event.PlayerInteractEvent;
 import wtf.tatp.meowtils.event.RenderTickEvent;
 import wtf.tatp.meowtils.event.SendPacketEvent;
+import wtf.tatp.meowtils.event.SlotClickEvent;
 import wtf.tatp.meowtils.event.api.EventTarget;
 import wtf.tatp.meowtils.extension.Extension;
 
@@ -76,6 +77,9 @@ public class SoundGen extends Extension {
 
     static final List<String> CLICK_STYLES = Arrays.asList("Clicks", "Loop", "Auto");
     static final List<String> OTHER_WHERE = Arrays.asList("Everywhere", "In Game");
+    static final List<String> INV_METHODS = Arrays.asList("Raw Mouse", "Slot Click");
+    static final int INV_RAW = 0, INV_SLOT = 1;
+    private static final boolean[] INV_TICK_BOUND = {false, false};
     static final List<String> OTHER_RELEASE = Arrays.asList("Real", "Off");
     static final List<String> RELEASE_MODES = Arrays.asList("Real", "Synthetic", "Off");
     static final List<String> TIMING_MODES = Arrays.asList("Spread", "Instant");
@@ -113,6 +117,7 @@ public class SoundGen extends Extension {
     @Config public String rightStyle = "Auto";
     @Config public int rightDragThreshold = 8;
     @Config public boolean rightChoke = true;
+    @Config public int dragReleaseFadeMs = 20;
     @Config public int rightVolume = 100;
     @Config public int rightHoldTimeoutMs = 120;
     @Config public boolean rightEndClick = true;
@@ -121,6 +126,9 @@ public class SoundGen extends Extension {
     @Config public String leftMethod = "Game Click";
     @Config public int leftVolume = 100;
     @Config public boolean leftChoke = true;
+
+    @Config public boolean invEnabled = true;
+    @Config public String invMethod = "Raw Mouse";
 
     @Config public boolean otherEnabled = true;
     @Config public String otherWhere = "Everywhere";
@@ -160,6 +168,11 @@ public class SoundGen extends Extension {
             Sound.DRAG_END, 1, RIGHT_TICK_BOUND);
     private final ClickChannel left = new ClickChannel(engine, timing, Sound.BUTTERFLY, Sound.BUTTERFLY, Sound.BUTTERFLY,
             Sound.BUTTERFLY, 2, LEFT_TICK_BOUND);
+    /** Clicks inside menus/inventories: left = single clicks, right = Auto (single, or rattle when held/fast). */
+    private final ClickChannel invLeft = new ClickChannel(engine, timing, Sound.BUTTERFLY, Sound.BUTTERFLY, Sound.BUTTERFLY,
+            Sound.BUTTERFLY, 3, INV_TICK_BOUND);
+    private final ClickChannel invRight = new ClickChannel(engine, timing, Sound.RIGHT_CLICK, Sound.RIGHT_CLICK, Sound.DRAG_LOOP,
+            Sound.DRAG_END, 4, INV_TICK_BOUND);
     private final KeyboardChannel otherKeys = new KeyboardChannel(engine, timing, Sound.OTHER_DOWN, Sound.OTHER_UP);
     /** Key codes owned by other channels this frame (so Other Keys skips them). */
     private final int[] handledKeys = new int[9];
@@ -179,6 +192,8 @@ public class SoundGen extends Extension {
 
     public SoundGen() {
         super("SoundGen", "Action-driven click & key ASMR");
+
+        otherKeys.applyKeySizes();
 
         slider("Master Volume", 0, 200, 5, "%", "masterVolume", int.class);
         check("Debug Readout", "debug");
@@ -214,6 +229,7 @@ public class SoundGen extends Extension {
             e.mode("Right Style", CLICK_STYLES, "rightStyle");
             e.slider("Drag Threshold", 3, 20, 1, "CPS", "rightDragThreshold", int.class);
             e.check("Right Choke", "rightChoke");
+            e.slider("Drag Release Fade", 5, 80, 1, "ms", "dragReleaseFadeMs", int.class);
             e.slider("Right Volume", 0, 200, 5, "%", "rightVolume", int.class);
             e.slider("Loop Hold Timeout", 60, 300, 5, "ms", "rightHoldTimeoutMs", int.class);
             e.check("Loop End Click", "rightEndClick");
@@ -238,6 +254,11 @@ public class SoundGen extends Extension {
         keyExpand("Space", "space", JUMP_METHODS);
         keyExpand("Shift", "shift", SNEAK_METHODS);
         keyExpand("Sprint", "sprint", SPRINT_METHODS);
+
+        expand("Inventory Clicks", e -> {
+            e.check("Inventory Sound", "invEnabled");
+            e.mode("Inventory Read", INV_METHODS, "invMethod");
+        });
 
         expand("Other Keys", e -> {
             e.check("Other Keys Sound", "otherEnabled");
@@ -275,6 +296,8 @@ public class SoundGen extends Extension {
         left.reset();
         for (KeyChannel k : keyChannels) k.reset();
         otherKeys.reset();
+        invLeft.reset();
+        invRight.reset();
         wasOnGround = true;
     }
 
@@ -355,6 +378,23 @@ public class SoundGen extends Extension {
         right.endClick = rightEndClick;
         right.dragThresholdCps = rightDragThreshold;
         right.choke = rightChoke;
+        right.loopFadeMs = dragReleaseFadeMs;
+
+        int inv = index(INV_METHODS, invMethod);
+        invLeft.enabled = invEnabled;
+        invLeft.method = inv;
+        invLeft.style = ClickChannel.STYLE_CLICKS;
+        invLeft.gain = leftVolume / 100f;
+        invLeft.choke = leftChoke;
+        invRight.enabled = invEnabled;
+        invRight.method = inv;
+        invRight.style = ClickChannel.STYLE_AUTO;
+        invRight.gain = rightVolume / 100f;
+        invRight.choke = rightChoke;
+        invRight.dragThresholdCps = rightDragThreshold;
+        invRight.holdTimeoutMs = rightHoldTimeoutMs;
+        invRight.endClick = rightEndClick;
+        invRight.loopFadeMs = dragReleaseFadeMs;
 
         left.enabled = leftEnabled;
         left.method = index(LEFT_METHODS, leftMethod);
@@ -415,6 +455,26 @@ public class SoundGen extends Extension {
         left.click(L_ATTACK, System.nanoTime());
     }
 
+    /**
+     * Inventory slot actions (Inventory Read = Slot Click). Hotbar swaps and Q-drops come from
+     * the keyboard and already sound there. A drag across slots (button held) is treated like
+     * fast clicking, so with enough slots it becomes the drag rattle.
+     */
+    @EventTarget
+    public void onSlotClick(SlotClickEvent event) {
+        if (!enabled) return;
+        int type = event.getClickType();
+        if (type == SlotClickEvent.CLICK_HOTBAR || type == SlotClickEvent.CLICK_DROP) return;
+        long now = System.nanoTime();
+        if (type == SlotClickEvent.CLICK_DRAG) {
+            invRight.click(INV_SLOT, now);
+        } else if (event.getClickedButton() == SlotClickEvent.BUTTON_RIGHT) {
+            invRight.click(INV_SLOT, now);
+        } else {
+            invLeft.click(INV_SLOT, now);
+        }
+    }
+
     @EventTarget
     public void onSend(SendPacketEvent event) {
         if (!enabled) return;
@@ -453,6 +513,9 @@ public class SoundGen extends Extension {
         space.state(J_RAW, focus && raw(mc.gameSettings.keyBindJump), now);
         shift.state(SN_RAW, focus && raw(mc.gameSettings.keyBindSneak), now);
         sprint.state(SP_RAW, focus && raw(mc.gameSettings.keyBindSprint), now);
+        boolean inMenu = mc.currentScreen != null;
+        invLeft.held(INV_RAW, inMenu && Mouse.isButtonDown(0), now);
+        invRight.held(INV_RAW, inMenu && Mouse.isButtonDown(1), now);
         pollOtherKeys(now);
     }
 
@@ -508,6 +571,8 @@ public class SoundGen extends Extension {
         }
         right.tick(now);
         left.tick(now);
+        invLeft.tick(now);
+        invRight.tick(now);
 
         if (++ticks % 20 == 0) debugReadout();
     }
@@ -570,6 +635,8 @@ public class SoundGen extends Extension {
             left.clearCounts();
             for (KeyChannel k : keyChannels) k.clearCounts();
             otherKeys.takePresses();
+            invLeft.clearCounts();
+            invRight.clearCounts();
             return;
         }
         String r = counts(right, CLICK_SHORT_R);
@@ -578,6 +645,8 @@ public class SoundGen extends Extension {
         String sp = counts(space, JUMP_SHORT);
         for (KeyChannel k : keyChannels) k.clearCounts();
         int other = otherKeys.takePresses();
+        int invL = invLeft.takeCount(INV_RAW) + invLeft.takeCount(INV_SLOT);
+        int invR = invRight.takeCount(INV_RAW) + invRight.takeCount(INV_SLOT);
         if (r != null || l != null) {
             Meowtils.addMessage("§8[§dSG§8] §7R/s " + (r == null ? "-" : r) + " §8| §7L/s " + (l == null ? "-" : l));
         }
@@ -585,6 +654,7 @@ public class SoundGen extends Extension {
             Meowtils.addMessage("§8[§dSG§8] §7Shift " + (sh == null ? "-" : sh) + " §8| §7Space " + (sp == null ? "-" : sp));
         }
         if (other > 0) Meowtils.addMessage("§8[§dSG§8] §7Other keys " + other + "/s");
+        if (invL + invR > 0) Meowtils.addMessage("§8[§dSG§8] §7Inventory L " + invL + " R " + invR + " (raw + slot events)");
         if (right.isLooping()) Meowtils.addMessage("§8[§dSG§8] §7Right: drag rattle on");
         if (engine.consumeClipped()) Meowtils.addMessage("§8[§dSG§8] §coutput clipped, lower the volume");
     }

@@ -190,9 +190,16 @@ Hearing the same recording twice in a row is the fastest way for ASMR to sound f
 | `drag_loop` | 6+ takes, 2–5 s each | used when Right Style = Loop or Auto |
 | `drag_end` | 8+ | the final clack when a drag stops (optional) |
 | `right_click` | 20+ | single right clicks for Right Style = Auto (falls back to `drag`) |
-| `other_down` / `other_up` | 20+ each | every other key: hotbar, Esc, chat typing (falls back to `key_down`/`key_up`) |
-| `key_down` / `key_up` | 20+ each | shared by every key that has no folder of its own |
-| `space_*`, `shift_*`, `w_*` … | 12+ each | optional per-key overrides |
+| `key_down` / `key_up` | 20+ each | **all normal-size (1u) keys**: letters, numbers, Esc, F-keys, arrows, Page Up/Down, Ctrl/Win/Alt |
+| `tab_down` / `tab_up` | 12+ each | **Tab and Backslash** (1.5u) |
+| `shift_down` / `shift_up` | 12+ each | **both Shifts and Caps Lock**, in game and when typing |
+| `backspace_down` / `backspace_up` | 12+ each | **Backspace and Enter** (2u) |
+| `space_down` / `space_up` | 12+ each | **the space bar**: the most distinct key |
+| `other_*`, `w_*`, `sprint_*` … | optional | per-key overrides; empty folders fall back step by step (`tab_down` → `other_down` → `key_down`) |
+
+Fn can't have a sound: the keyboard handles it internally and never reports it to the PC.
+
+**What to record first** (the minimum for a full pack): `butterfly`, `right_click`, `drag_loop`, `drag_end`, `key_down`/`key_up`, `space_*`, `shift_*`, `tab_*`, `backspace_*`. Everything else falls back to these.
 
 ### 4.2 Mic and room setup (Maono G1 Neo)
 
@@ -225,6 +232,9 @@ Record **long takes with many hits**, not one file per click; the sound tool cut
 - Record continuous drag-click runs of 3–6 s at different speeds: slow (about 12 CPS), medium (about 18) and fast (about 25+).
 - **Don't split these.** In Audacity, cut off the start and end (the finger landing and lifting), then export each run as its own file straight into `drag_loop/`. The loop point is crossfaded automatically.
 
+**Single right clicks (`right_click`)**
+- Record normal, separate right clicks (30–60 of them), as for butterfly. Used when Right Style = Auto for slow clicks and in inventories.
+
 **Drag end (`drag_end`)**
 - Record 10–20 "finish a drag and lift off" moments. Split them with a high `--max` such as 300.
 
@@ -233,7 +243,12 @@ Record **long takes with many hits**, not one file per click; the sound tool cut
   - press, **hold about 0.15–0.25 s**, release,
   - **pause at least 0.6 s**,
   - repeat 20–30 times per take.
-- One take per key type: a mix of WASD for `key_down`/`key_up`, the space bar for `space_*`, and Shift for `shift_*`.
+- One take per key size, split into the matching folders:
+  - a mix of normal keys (W A S D, numbers, Esc, letters) → `key_down` / `key_up`;
+  - the space bar → `space_*`;
+  - Shift and Caps Lock (mix them) → `shift_*`;
+  - Tab and Backslash → `tab_*`;
+  - Backspace and Enter → `backspace_*`.
 - Releases are often much quieter than presses. If the tool reports skipped hits, raise the mic gain a little or use `--threshold 40`.
 
 ---

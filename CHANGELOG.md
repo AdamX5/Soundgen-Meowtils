@@ -3,6 +3,22 @@
 Each `## <version>` section becomes the GitHub release notes when that version is published
 (see `.github/workflows/build.yml`). Newest first.
 
+## 0.3.0
+
+From the second in-game test (0.2.0):
+
+- **Inventory clicks**: clicking in any menu or inventory plays clicks (shift-click included).
+  Left = single clicks. Right = single click (e.g. taking half a stack), switching to the drag
+  rattle when clicking fast or dragging across slots. "Inventory Read": Raw Mouse (every
+  physical click in any menu, default) or Slot Click (only clicks that act on a slot).
+- **Key sizes**: bigger keys have their own sounds. New folders `tab_*` (Tab, Backslash) and
+  `backspace_*` (Backspace, Enter); both Shifts and Caps Lock use `shift_*`; the space bar
+  uses `space_*`, also when typing in chat. Everything else is a normal 1u key.
+  Empty folders now fall back step by step (`tab_down` -> `other_down` -> `key_down`).
+- **Drag Release Fade** (Right Click section, default 20 ms): letting go fades the rattle out
+  instead of cutting it, followed by the optional `drag_end` lift-off click.
+- Placeholder sounds are darker and softer.
+
 ## 0.2.0
 
 From the first in-game test (Lunar, 0.1.1):

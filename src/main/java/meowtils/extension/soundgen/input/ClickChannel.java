@@ -26,7 +26,6 @@ public final class ClickChannel {
     public static final int STYLE_CLICKS = 0;
     public static final int STYLE_LOOP = 1;
     public static final int STYLE_AUTO = 2;
-    private static final int LOOP_FADE_MS = 12;
     /** AUTO measures the click rate over this window. */
     static final long RATE_WINDOW_NANOS = 300_000_000L;
     private static final int HISTORY = 32;
@@ -51,6 +50,8 @@ public final class ClickChannel {
     public volatile int holdTimeoutMs = 120;
     public volatile boolean endClick = true;
     public volatile boolean choke = true;
+    /** How long a rattle takes to fade out after the clicking stops (no hard cut). */
+    public volatile int loopFadeMs = 20;
     /** AUTO switches to the rattle at or above this many clicks per second. */
     public volatile int dragThresholdCps = 8;
 
@@ -172,7 +173,7 @@ public final class ClickChannel {
 
     public void stopLoop(long now) {
         if (looping.compareAndSet(true, false)) {
-            engine.loopStop(tag, LOOP_FADE_MS, now);
+            engine.loopStop(tag, loopFadeMs, now);
             if (endClick) engine.play(end, gain, now, chokeGroup());
         }
     }

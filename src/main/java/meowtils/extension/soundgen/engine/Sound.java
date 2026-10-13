@@ -4,7 +4,8 @@ package meowtils.extension.soundgen.engine;
  * Every sound slot the engine knows about. Each slot maps to a folder of the same name
  * under the sounds directory; every .wav in that folder is one variation.
  *
- * A slot with a fallback borrows the fallback's samples when its own folder is empty,
+ * A slot with a fallback borrows the fallback's samples when its own folder is empty
+ * (following the chain: tab_down -> other_down -> key_down),
  * so per-key recordings are optional: record key_down/key_up once and every key uses them.
  * A slot with no recordings at all (and no fallback recordings) gets a synthesised
  * placeholder so the engine can be tested before anything is recorded.
@@ -35,7 +36,13 @@ public enum Sound {
     SPRINT_UP("sprint_up", KEY_UP, Placeholder.MOD_UP, false),
     /** Every other keyboard key (hotbar, F5/perspective, Esc, chat typing, ...). */
     OTHER_DOWN("other_down", KEY_DOWN, Placeholder.KEY_DOWN, false),
-    OTHER_UP("other_up", KEY_UP, Placeholder.KEY_UP, false);
+    OTHER_UP("other_up", KEY_UP, Placeholder.KEY_UP, false),
+    /** 1.5u keys: Tab and Backslash. */
+    TAB_DOWN("tab_down", OTHER_DOWN, Placeholder.MOD_DOWN, false),
+    TAB_UP("tab_up", OTHER_UP, Placeholder.MOD_UP, false),
+    /** 2u keys: Backspace and Enter. (Shift-size keys use shift_*, the space bar space_*.) */
+    BACKSPACE_DOWN("backspace_down", OTHER_DOWN, Placeholder.WIDE_DOWN, false),
+    BACKSPACE_UP("backspace_up", OTHER_UP, Placeholder.WIDE_UP, false);
 
     public final String folder;
     public final Sound fallback;
